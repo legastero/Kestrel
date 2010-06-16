@@ -1,0 +1,6 @@
+build*
+kestrel.egg-info*
+*.pyc
+*~
+\#*
+*.db
