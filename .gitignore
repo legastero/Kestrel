@@ -4,3 +4,4 @@ kestrel.egg-info*
 *~
 \#*
 *.db
+.\#*
