@@ -380,10 +380,8 @@ class JobBackend(object):
             self.db.merge(task)
             self.db.commit()
             tasks.append(task)
-        if tasks:
-            return tasks
-        return False
-
+        return tasks
+        
 # ######################################################################
 
 class TaskBackend(object):
