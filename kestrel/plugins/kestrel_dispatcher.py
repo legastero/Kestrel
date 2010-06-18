@@ -61,8 +61,8 @@ class kestrel_dispatcher(base.base_plugin):
             self.finish_task(iq)
 
     def dispatch_job(self, job_id):
-        task = self.backend.jobs.match(job_id)
-        if task:
+        tasks = self.backend.jobs.match(job_id)
+        for task in tasks:
             log_info = (task.task_id, task.job_id, task.worker.jid)
             logging.info('Matched task %d of job %d to %s' % log_info)
             result = self.send_task(task)
@@ -74,7 +74,7 @@ class kestrel_dispatcher(base.base_plugin):
                 logging.info('Task %d of job %d was not started by %s. Resetting.' % log_info)
                 self.backend.tasks.reset(task.job_id, task.task_id)
                 self.xmpp['kestrel_roster'].sendPresence(task.job.jid)
-        else:
+        if not tasks:
             logging.info('No match for job %d' % job_id)
 
     def dispatch_worker(self, worker_jid):
