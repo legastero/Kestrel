@@ -371,15 +371,13 @@ class JobBackend(object):
         self.db.commit()
         tasks = []
         for worker in result:
-            task = self.db.query(Task).filter_by(job_id=job_id, status='queued')
-            if len(task) == 0:
-                break
-            task = task[0]
-            task.worker = worker
-            task.status = 'pending'
-            self.db.merge(task)
-            self.db.commit()
-            tasks.append(task)
+            task = self.db.query(Task).filter_by(job_id=job_id, status='queued').first()
+            if task:
+                task.worker = worker
+                task.status = 'pending'
+                self.db.merge(task)
+                self.db.commit()
+                tasks.append(task)
         return tasks
         
 # ######################################################################
