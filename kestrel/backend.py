@@ -193,6 +193,18 @@ class WorkerBackend(object):
 
     # ------------------------------------------------------------------
 
+    def status(self):
+        return self.query(self._status, tuple())
+
+    def _status(self):
+        available = self.db.query(Worker).filter_by(state='available').count()
+        busy = self.db.query(Worker).filter_by(state='busy').count()
+        return {'online': str(available + busy),
+                'available': str(available),
+                'busy': str(busy)}
+
+    # ------------------------------------------------------------------
+
     def add(self, jid, capabilities):
         return self.query(self._add, (jid, capabilities))
 
@@ -287,6 +299,42 @@ class JobBackend(object):
         self.backend = backend
         self.db = self.backend.db
         self.query = self.backend.query
+
+    # ------------------------------------------------------------------
+
+    def status(self, job_id=None):
+        return self.query(self._status, (job_id,))
+
+    def _status(self, job_id=None):
+        if job_id is None:
+            statuses = {}
+            jobs = self.db.query(Job).filter(Job.status!='completed').all()
+            for job in jobs:
+                status = self._job_status(job.id)
+                if status:
+                    statuses[job.id] = status
+            return statuses
+        else:
+            return self._job_status(job_id)
+
+    def _job_status(self, job_id):
+        job = self.db.query(Job).filter_by(id=job_id).first()
+        if job is None:
+            return False
+
+        requested = job.queue
+        queued = self.db.query(Task).filter_by(job_id=job_id, status='queued').count()
+        pending = self.db.query(Task).filter_by(job_id=job_id, status='pending').count()
+        running = self.db.query(Task).filter_by(job_id=job_id, status='running').count()
+        cancelling = self.db.query(Task).filter_by(job_id=job_id, status='cancelling').count()
+        cancelled = self.db.query(Task).filter_by(job_id=job_id, status='cancelled').count()
+        completed = self.db.query(Task).filter_by(job_id=job_id, status='completed').count()
+
+        return {'owner': job.owner,
+                'requested': requested,
+                'queued': queued + pending,
+                'running': running,
+                'completed': cancelling + cancelled + completed}
 
     # ------------------------------------------------------------------
 
