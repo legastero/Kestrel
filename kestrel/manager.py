@@ -51,5 +51,6 @@ class Manager(componentxmpp.ComponentXMPP):
         self.plugin['kestrel_pool'] = plugins.kestrel_pool(self, {'backend': self.backend,
                                                                   'jid': self.pool_jid})
         self.plugin['kestrel_jobs'] = plugins.kestrel_jobs(self, {'backend': self.backend,
+                                                                  'pool_jid': self.pool_jid,
                                                                   'jid': self.submit_jid})
         self.plugin['kestrel_dispatcher'] = plugins.kestrel_dispatcher(self, {'backend': self.backend})
