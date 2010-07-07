@@ -112,10 +112,10 @@ class kestrel_jobs(base.base_plugin):
     def cancel_job_iq(self, iq):
         job = iq['kestrel_job']
         if self._cancel_job(iq['from'], job['id']):
-            self.xmpp.sendPresence(pto=iq['from'].bare, pfrom=iq['to'], pstatus='Canceled', pshow='xa')
+            self.xmpp.sendPresence(pto=iq['from'].bare, pfrom=iq['to'], pstatus='Cancelled', pshow='xa')
             iq.reply()
             iq['kestrel_job']['id'] = job['id']
-            iq['kestrel_job']['status'] = 'canceled'
+            iq['kestrel_job']['status'] = 'cancelled'
             iq.send()
         else:
             iq.reply().error().setPayload(job.xml)
@@ -129,13 +129,13 @@ class kestrel_jobs(base.base_plugin):
         self._cancel_job(presence['from'], job_id)
 
     def _cancel_job(self, owner, job_id):
-        canceled = self.backend.jobs.cancel(owner.bare, job_id)
-        if canceled:
-            logging.info("JOB: Job %s canceled by %s" % (job_id, owner.jid))
-            self.xmpp.event('kestrel_job_canceled', job_id)
-            if isinstance(canceled, list):
-                for task in canceled:
-                    self.xmpp.event('kestrel_task_canceled', {'task_id': task.task_id,
+        cancelled = self.backend.jobs.cancel(owner.bare, job_id)
+        if cancelled:
+            logging.info("JOB: Job %s cancelled by %s" % (job_id, owner.jid))
+            self.xmpp.event('kestrel_job_cancelled', job_id)
+            if isinstance(cancelled, list):
+                for task in cancelled:
+                    self.xmpp.event('kestrel_task_cancelled', {'task_id': task.task_id,
                                                               'job_id': task.job_id,
                                                               'worker_id': task.worker_id})
             else:

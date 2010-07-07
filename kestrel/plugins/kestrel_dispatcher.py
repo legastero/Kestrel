@@ -45,7 +45,7 @@ class kestrel_dispatcher(base.base_plugin):
                      self.handle_task))
         self.xmpp.stanzaPlugin(Iq, Task)
 
-        self.xmpp.add_event_handler('kestrel_task_canceled', self.cancel_task)
+        self.xmpp.add_event_handler('kestrel_task_cancelled', self.cancel_task)
         self.xmpp.add_event_handler('kestrel_job_queued', self.dispatch_job)
         self.xmpp.add_event_handler('kestrel_worker_available', self.dispatch_worker)
         self.xmpp.add_event_handler('kestrel_worker_offline', self.reset_worker_tasks)

@@ -53,7 +53,7 @@ class kestrel_roster(base.base_plugin):
                 state = None
             comments = {None: 'Running',
                         'away': 'Queued',
-                        'dnd': 'Canceled',
+                        'dnd': 'Cancelled',
                         'xa': 'Finished'}
             logging.info("ROSTER: Send presence for %s to %s." % (jid, to_jid))
             self.xmpp.sendPresence(pfrom=jid, pto=to_jid, pshow=state, pstatus=comments[state])

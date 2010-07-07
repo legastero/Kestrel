@@ -75,15 +75,15 @@ class SubmitClient(Client):
 class CancelClient(Client): 
     def setup(self):
         self.add_event_handler('session_start', self.do_cancel)
-        self.add_event_handler('kestrel_job_canceled', self.handle_result, threaded=True)
+        self.add_event_handler('kestrel_job_cancelled', self.handle_result, threaded=True)
         
     def do_cancel(self, event):
         self['kestrel_client'].cancelJob(self.data)
 
     def handle_result(self, iq):
         job = iq['kestrel_job']
-        if job['status'] == 'canceled':
-            print 'Job canceled.'
+        if job['status'] == 'cancelled':
+            print 'Job cancelled.'
         self.disconnect()
 
 class StatusClient(Client):

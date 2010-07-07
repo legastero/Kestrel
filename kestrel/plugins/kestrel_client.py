@@ -62,7 +62,7 @@ class kestrel_client(base.base_plugin):
             self.xmpp.event('kestrel_error', iq)
             return
         events = {'queued': 'kestrel_job_queued',
-                  'canceled': 'kestrel_job_canceled',
+                  'cancelled': 'kestrel_job_cancelled',
                   'complete': 'kestrel_job_complete'}
         event = events.get(job['status'], 'kestrel_error')
         self.xmpp.event(event, iq)

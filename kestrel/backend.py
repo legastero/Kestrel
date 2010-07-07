@@ -308,7 +308,8 @@ class JobBackend(object):
     def _status(self, job_id=None):
         if job_id is None:
             statuses = {}
-            jobs = self.db.query(Job).filter(Job.status!='completed').all()
+            jobs = self.db.query(Job).filter(and_(Job.status!='completed',
+                                                  Job.status!='cancelled')).all()
             for job in jobs:
                 status = self._job_status(job.id)
                 if status:
@@ -389,7 +390,7 @@ class JobBackend(object):
         job = self.db.query(Job).filter_by(owner=owner, id=job_id).all()
         if job:
             job = job[0]
-            job.status = 'canceled'
+            job.status = 'cancelled'
             self.db.merge(job)
             self.db.commit()
             self.backend.roster._set_state(job.jid, 'dnd')
