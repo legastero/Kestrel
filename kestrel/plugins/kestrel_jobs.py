@@ -32,6 +32,7 @@ from sleekxmpp.stanza.iq import Iq
 from sleekxmpp.plugins.xep_0030 import DiscoNode
 
 from kestrel.stanza.job import Job
+from kestrel.stanza.status import Status, JobStatus
 
 class kestrel_jobs(base.base_plugin):
     def plugin_init(self):
@@ -47,13 +48,17 @@ class kestrel_jobs(base.base_plugin):
                      self.handle_job))
         self.xmpp.stanzaPlugin(Iq, Job)
 
+        self.xmpp.registerHandler(
+            Callback('Kestrel Job Status',
+                     MatchXPath('{%s}iq/{%s}query' % (self.xmpp.default_ns,
+                                                      Status.namespace)),
+                     self.handle_status))
+        self.xmpp.stanzaPlugin(Iq, Status)
+        self.xmpp.stanzaPlugin(Status, JobStatus)
+
         self.xmpp.add_event_handler('kestrel_job', self.queue_job)
         self.xmpp.add_event_handler('kestrel_job_cancel', self.cancel_job_iq)
-        self.xmpp.add_event_handler('kestrel_job_status', self.check_job)
         self.xmpp.add_event_handler('presence_unsubscribed', self.cancel_job_unsubscribe)
-
-        #self.xmpp.add_event_handler('disco_items_request', self.disco_items, threaded=True)
-        #self.xmpp.add_event_handler('disco_info_request', self.disco_info, threaded=True)
 
     def post_init(self):
         base.base_plugin.post_init(self)
@@ -61,20 +66,49 @@ class kestrel_jobs(base.base_plugin):
     def handle_job(self, iq):
         job = iq['kestrel_job']
         events = {'submit': 'kestrel_job',
-                  'status': 'kestrel_job_status',
                   'cancel': 'kestrel_job_cancel'}
         self.xmpp.event(events[job['action']], iq)
 
-    def disco_items_request(self, iq):
-        pass
+    def handle_status(self, iq):
+        query = iq['kestrel_status']
+        job_id = iq['kestrel_status']['id']
 
-    def disco_info_request(self, iq):
-        pass
-
-    def check_job(self, iq):
-        job = iq['kestrel_job']
-        logging.info("Job status requested by %s" % iq['from'].jid)
-
+        if iq['to'].bare == self.config.get('pool_jid', ''):
+            return
+        elif iq['to'].bare == self.submit_jid:
+            logging.info("STATUS: Job queue status requested by %s" % iq['from'].jid)
+            statuses = self.backend.jobs.status()
+            iq.reply()
+            iq['kestrel_status']['id'] = ''
+            for job_id in statuses:
+                status = statuses[job_id]
+                iq['kestrel_status'].addJob(job_id,
+                                            status['owner'],
+                                            status['requested'],
+                                            status['queued'],
+                                            status['running'],
+                                            status['completed'])
+            iq.send()
+        else:
+            status = self.backend.jobs.status(job_id)
+            if status:
+                logging.info("STATUS: Job %s status requested by %s" % (job_id, iq['from'].jid))
+                iq.reply()
+                iq['kestrel_status'].addJob(job_id, 
+                                            status['owner'],
+                                            status['requested'],
+                                            status['queued'],
+                                            status['running'],
+                                            status['completed'])
+                iq.send()
+            else:
+                logging.info("STATUS: Job %s status requested by %s, but does not exist." % (job_id, iq['from'].jid))
+                iq.reply().error().setPayload(query.xml)
+                iq['error']['code'] = '404'
+                iq['error']['type'] = 'cancel'
+                iq['error']['condition'] = 'item-not-found'
+                iq.send()
+            
     def cancel_job_iq(self, iq):
         job = iq['kestrel_job']
         if self._cancel_job(iq['from'], job['id']):
@@ -91,15 +125,13 @@ class kestrel_jobs(base.base_plugin):
             iq.send()
 
     def cancel_job_unsubscribe(self, presence):
-        job_id = presence['to'].user.split('_')
-        if len(job_id) > 1:
-            job_id = job_id[1]
-            self._cancel_job(presence['from'], job_id)
+        job_id = self.backend.jobs.get_id(presence['to'].jid)
+        self._cancel_job(presence['from'], job_id)
 
     def _cancel_job(self, owner, job_id):
         canceled = self.backend.jobs.cancel(owner.bare, job_id)
         if canceled:
-            logging.info("Job %s canceled by %s" % (job_id, owner.jid))
+            logging.info("JOB: Job %s canceled by %s" % (job_id, owner.jid))
             self.xmpp.event('kestrel_job_canceled', job_id)
             if isinstance(canceled, list):
                 for task in canceled:
@@ -118,9 +150,9 @@ class kestrel_jobs(base.base_plugin):
                                          cleanup=job['cleanup'],
                                          queue=job['queue'],
                                          requires=job['requirements'])
-        logging.info("Job %s submitted by %s, requires: %s" % (job_id,
-                                                               iq['from'].jid,
-                                                               str(job['requirements'])))
+        logging.info("JOB: Job %s submitted by %s, requires: %s" % (job_id,
+                                                                    iq['from'].jid,
+                                                                    str(job['requirements'])))
 
         iq.reply()
         iq['kestrel_job']['status'] = 'queued'
