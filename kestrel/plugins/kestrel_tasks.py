@@ -69,7 +69,7 @@ class kestrel_tasks(base.base_plugin):
     def handle_task(self, iq):
         task = iq['kestrel_task']
 
-        logging.info("Received task: %s" % str(iq))
+        logging.info("TASK: Received task: %s" % str(iq))
 
         if task['action'] == 'execute' and task['command'] == '':
             self._sendError(iq, '406', 'modify', 'not-acceptable')
@@ -83,8 +83,6 @@ class kestrel_tasks(base.base_plugin):
         from_jid = iq['from'].jid
         task = iq['kestrel_task']
         process_id = (iq['from'].user, iq['from'].resource)
-
-        print '>>>>>>', self.tasks
 
         if len(self.tasks) >= self.max_tasks:
             self._sendError(iq, '500', 'cancel', 'resource-constraint')
@@ -111,12 +109,16 @@ class kestrel_tasks(base.base_plugin):
             iq['from'] = from_jid
             self._sendError(iq, '500', 'cancel', 'internal-server-error')
 
-        try:
-            del self.tasks[process_id]
-        except:
-            pass
+        with self.lock:
+            if process_id in self.tasks:
+                del self.tasks[process_id]
 
         self.xmpp.event('kestrel_task_finished', iq)
+        
+        if task['cleanup']:
+            command = "%s %s" % (task['cleanup'], process_id[1])
+            self._execute(process_id, command, cleanup=True)
+
         self.xmpp.sendPresence(pstatus='Ready for Task')
 
     def cancel_task(self, iq):
@@ -127,7 +129,7 @@ class kestrel_tasks(base.base_plugin):
         else:
             self._sendError(iq, '404', 'cancel', 'item-not-found')
 
-    def _execute(self, name, command):
+    def _execute(self, name, command, cleanup=False):
         """Wrapper function to open a subprocess."""
         try:
             task_process = subprocess.Popen(("sh -c " + command).split(),
@@ -135,28 +137,37 @@ class kestrel_tasks(base.base_plugin):
                                             stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE,
                                             preexec_fn=os.setsid)
-            with self.lock:
-                self.tasks[name] = task_process
-            logging.info("Task started: (%s)" % command)
-            task_process.wait()
+            if not cleanup:
+                with self.lock:
+                    self.tasks[name] = task_process
+                logging.info("TASK: Task started: %s (%s)" % (name, command))
+                task_process.wait()
+                logging.info("TASK: Task finished: %s (%s)" % (name, command))
+            else:
+                logging.info("TASK: Cleanup started: %s (%s)" % (name, command))
+                task_process.wait()
+                logging.info("TASK: Cleanup finished: %s (%s)" % (name, command))
+            
             return True
         except:
-            logging.info("Error starting task: (%s)" % command)
+            error_type = "cleanup" if cleanup else "task"
+            logging.info("TASK: Error starting %s: (%s)" % (error_type, command))
             return False
 
     def _cancel(self, name):
         """Wrapper function to kill a subprocess."""
         if name not in self.tasks:
-            logging.info("Tried cancelling task %s, but task not found." % str(name))
+            logging.info("TASK: Tried cancelling task %s, but task not found." % str(name))
             return False
         task_process = self.tasks[name]
-        logging.info("Cancelling task %s" % str(name))
+        logging.info("TASK: Cancelling task %s" % str(name))
         try:
             os.killpg(task_process.pid, signal.SIGKILL)
         except:
             pass
         with self.lock:
-            del self.tasks[name]
+            if name in self.tasks:
+                del self.tasks[name]
         return True
 
     def _sendError(self, iq, code, etype, condition, text=''):
