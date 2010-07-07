@@ -30,13 +30,14 @@ from kestrel.config import load_config
 from kestrel.database import Database
 from kestrel.worker import Worker
 from kestrel.manager import Manager
-from kestrel.user import SubmitClient, CancelClient
+from kestrel.user import SubmitClient, CancelClient, StatusClient
 
 
 if __name__ == '__main__':
-    opts = optparse.OptionParser()
-    opts.usage = "Usage: %prog [options] worker|manager|user|analyzer"
-    opts.version = '%%prog %s' % __version__
+    opts = optparse.OptionParser(
+        usage="Usage: %prog [options] worker|manager|submit <job file>|cancel <job id>|status [pool|<job id>]",
+        version='%%prog %s' % __version__)
+
     opts.add_option('-q','--quiet',
                     help='set logging to ERROR',
                     action='store_const',
@@ -80,7 +81,8 @@ if __name__ == '__main__':
     roles = {'worker': Worker,
              'manager': Manager,
              'submit': SubmitClient,
-             'cancel': CancelClient}
+             'cancel': CancelClient,
+             'status': StatusClient}
     role = roles.get(args[0], Worker)
 
     xmpp = role(conf['XMPP'].get('jid'), conf['XMPP'].get('password'), conf, args)

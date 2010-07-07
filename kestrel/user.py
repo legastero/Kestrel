@@ -34,7 +34,7 @@ class Client(sleekxmpp.ClientXMPP):
 
         self.config = config
         self.manager = config['user'].get('manager', '')
-        self.data = args[1]
+        self.data = args[1] if len(args) >= 2 else None
 
         self.plugin['kestrel_client'] = plugins.kestrel_client(self, {'manager': self.manager})
 
@@ -84,4 +84,19 @@ class CancelClient(Client):
         job = iq['kestrel_job']
         if job['status'] == 'canceled':
             print 'Job canceled.'
+        self.disconnect()
+
+class StatusClient(Client):
+    def setup(self):
+        self.add_event_handler('session_start', self.do_status)
+        self.add_event_handler('kestrel_status', self.handle_status, threaded=True)
+
+    def do_status(self, event):
+        if self.data == 'pool':
+            self['kestrel_client'].statusPool()
+        else:
+            self['kestrel_client'].statusJob(self.data)
+
+    def handle_status(self, iq):
+        print iq
         self.disconnect()

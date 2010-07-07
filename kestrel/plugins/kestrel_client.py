@@ -32,6 +32,7 @@ from sleekxmpp.stanza.iq import Iq
 from sleekxmpp.plugins.xep_0030 import DiscoNode
 
 from kestrel.plugins.kestrel_jobs import Job
+from kestrel.stanza.status import Status, JobStatus, PoolStatus
 
 class kestrel_client(base.base_plugin):
     def plugin_init(self):
@@ -44,8 +45,16 @@ class kestrel_client(base.base_plugin):
                      MatchXPath('{%s}iq/{%s}job' % (self.xmpp.default_ns,
                                                     Job.namespace)),
                      self.handle_job))
-
         self.xmpp.stanzaPlugin(Iq, Job)
+
+        self.xmpp.registerHandler(
+            Callback('Kestrel Status',
+                     MatchXPath('{%s}iq/{%s}query' % (self.xmpp.default_ns,
+                                                      Status.namespace)),
+                     self.handle_status))
+        self.xmpp.stanzaPlugin(Iq, Status)
+        self.xmpp.stanzaPlugin(Status, JobStatus)
+        self.xmpp.stanzaPlugin(Status, PoolStatus)
 
     def handle_job(self, iq):
         job = iq['kestrel_job']
@@ -57,6 +66,9 @@ class kestrel_client(base.base_plugin):
                   'complete': 'kestrel_job_complete'}
         event = events.get(job['status'], 'kestrel_error')
         self.xmpp.event(event, iq)
+
+    def handle_status(self, iq):
+        self.xmpp.event('kestrel_status', iq)
 
     def submitJob(self, job):
         reqs = job.get('requires', '')
@@ -84,3 +96,21 @@ class kestrel_client(base.base_plugin):
         iq['to'] = 'job_%s@%s' % (job_id, self.manager)
         iq.send(block=False)
 
+    def statusJob(self, job_id=None):
+        iq = self.xmpp.makeIq(ifrom=self.xmpp.fulljid)
+        iq['kestrel_status']['id'] = job_id
+        iq['type'] = 'get'
+        iq['id']  = 'job-status'
+        if job_id is None:
+            iq['to'] = 'submit@%s' % self.manager
+        else:
+            iq['to'] = 'job_%s@%s' % (job_id, self.manager)
+        iq.send(block=False)
+
+    def statusPool(self):
+        iq = self.xmpp.makeIq(ifrom=self.xmpp.fulljid)
+        iq['kestrel_status']['id'] = None
+        iq['type'] = 'get'
+        iq['id']  = 'pool-status'
+        iq['to'] = 'pool@%s' % self.manager
+        iq.send(block=False)
