@@ -122,7 +122,7 @@ class Database(object):
                             Column('show', String))
 
         # --------------------------------------------------------------
-        # Jobs
+        # Tasks
         # --------------------------------------------------------------
         self.tasks = Table('tasks', self.metadata,
                            Column('id', Integer, primary_key=True),
