@@ -76,7 +76,7 @@ if __name__ == '__main__':
             options.configfile = '~/.kestrel/%s.rc' % args[0]
 
     conf = load_config(options.configfile)
-    logging.basicConfig(level=options.loglevel, format='%(levelname)-8s %(message)s')
+    logging.basicConfig(level=options.loglevel, format='%(asctime)s %(levelname)-8s %(message)s')
 
     roles = {'worker': Worker,
              'manager': Manager,

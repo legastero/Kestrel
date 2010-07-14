@@ -98,5 +98,13 @@ class StatusClient(Client):
             self['kestrel_client'].statusJob(self.data)
 
     def handle_status(self, iq):
-        print iq
+        status = iq['kestrel_status']
+        if status['pool']['online']:
+            print 'Kestrel Pool Status:'
+            print '   Online: %(online)s\nAvailable: %(available)s\n     Busy: %(busy)s' % status['pool']
+        for job in status['jobs']:
+            print 'Kestrel Jobs Status: (requested) queued/running/completed'
+            print '  Job %(id)s: (%(requested)s) %(queued)s/%(running)s/%(completed)s' % job
         self.disconnect()
+
+

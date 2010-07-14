@@ -9,7 +9,7 @@ def read(fname):
 setup(name='kestrel',
       version=kestrel.__version__,
       description='An XMPP-based Many-Task Computing Framework',
-      long_description=read('README.rst'),
+      long_description=read('README'),
       classifiers=['Development Status :: 3 - Alpha',
                    'Environment :: Console',
                    'Intended Audience :: Science/Research',
