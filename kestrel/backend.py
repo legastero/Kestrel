@@ -60,7 +60,10 @@ class RosterBackend(object):
     def _states(self, owner):
         items = self.db.query(RosterItem.jid, RosterItem.show).filter_by(owner=owner).all()
         self.db.commit()
-        return [(r[0], r[1]) for r in items]
+        states = set()
+        for r in items:
+            states.add((r[0], r[1]))
+        return states
 
     # ------------------------------------------------------------------
 
@@ -88,13 +91,19 @@ class RosterBackend(object):
 
     # ------------------------------------------------------------------
 
-    def jids(self):
-        return self.query(self._jids, tuple())
+    def jids(self, jid=None):
+        return self.query(self._jids, (jid,))
 
-    def _jids(self):
-        items = self.db.query(RosterItem.owner).all()
+    def _jids(self, jid=None):
+        if jid is None:
+            items = self.db.query(RosterItem.owner).all()
+        else:
+            items = self.db.query(RosterItem.owner).filter_by(jid=jid).all()
         self.db.commit()
-        return [r[0] for r in items]
+        jids = set()
+        for r in items:
+            jids.add(r[0])
+        return jids
 
     # ------------------------------------------------------------------
 
@@ -314,6 +323,7 @@ class JobBackend(object):
                 status = self._job_status(job.id)
                 if status:
                     statuses[job.id] = status
+            print statuses
             return statuses
         else:
             return self._job_status(job_id)

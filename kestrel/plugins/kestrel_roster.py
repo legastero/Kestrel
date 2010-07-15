@@ -46,8 +46,11 @@ class kestrel_roster(base.base_plugin):
         self.xmpp.add_event_handler('presence_unsubscribed', self.unsubscribed)
         self.xmpp.add_event_handler('presence_probe', self.probe)
 
-    def sendPresence(self, jid, probe=False):
-        roster = self.backend.roster.states(jid)
+    def sendPresence(self, jid, to=None, probe=False):
+        if to is None:
+            roster = self.backend.roster.states(jid)
+        else:
+            roster = [(to, self.backend.roster.state(jid))]
         for to_jid, state in roster:
             if state == 'chat':
                 state = None
@@ -79,9 +82,9 @@ class kestrel_roster(base.base_plugin):
 
     def online(self, presence):
         from_jid = presence['from'].bare
-        jids = self.backend.roster.jids()
+        jids = self.backend.roster.jids(from_jid)
         for jid in jids:
-            self.sendPresence(jid)
+            self.sendPresence(jid, to=from_jid)
 
     def subscribe(self, presence):
         logging.info("ROSTER: Subsribe %s to %s" % (presence['to'], presence['from']))
