@@ -102,9 +102,12 @@ class StatusClient(Client):
         if status['pool']['online']:
             print 'Kestrel Pool Status:'
             print '   Online: %(online)s\nAvailable: %(available)s\n     Busy: %(busy)s' % status['pool']
-        for job in status['jobs']:
+        if len(status['jobs']) > 0:       
             print 'Kestrel Jobs Status: (requested) queued/running/completed'
-            print '  Job %(id)s: (%(requested)s) %(queued)s/%(running)s/%(completed)s' % job
+            for job in status['jobs']:
+                print '  Job %(id)s: (%(requested)s) %(queued)s/%(running)s/%(completed)s - %(owner)s' % job
         self.disconnect()
+
+
 
 
