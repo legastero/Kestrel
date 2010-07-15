@@ -271,17 +271,17 @@ class WorkerBackend(object):
                      Worker.capabilities.like(Job.requirements),
                      Worker.jid==worker_jid,
                      Worker.state=='available')
-        job = self.db.query(Job).join((Worker, Worker.jid==worker_jid)).filter(where).first()
-        if job is None:
-            return False
-        task = self.db.query(Task).filter_by(job_id=job.id, status='queued').first()
-        if task is None:
-            return False
-        task.worker = worker
-        task.status = 'pending'
-        self.db.merge(task)
-        self.db.commit()
-        return task
+        jobs = self.db.query(Job).join((Worker, Worker.jid==worker_jid)).filter(where).all()
+        for job in jobs:
+            task = self.db.query(Task).filter_by(job_id=job.id, status='queued').first()
+            if task is None:
+                continue
+            task.worker = worker
+            task.status = 'pending'
+            self.db.merge(task)
+            self.db.commit()
+            return task
+        return False
 
     # ------------------------------------------------------------------
 
