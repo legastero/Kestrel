@@ -45,7 +45,7 @@ class kestrel_pool(base.base_plugin):
         self.xmpp.stanzaPlugin(Iq, Status)
         self.xmpp.stanzaPlugin(Status, PoolStatus)
 
-        self.xmpp.add_event_handler('got_online', self.online)
+        self.xmpp.add_event_handler('got_online', self.online, threaded=True)
         self.xmpp.add_event_handler('changed_status', self.changed)
         self.xmpp.add_event_handler('got_offline', self.offline)
         self.xmpp.add_event_handler('disco_info', self.check_info)

@@ -21,4 +21,4 @@ import worker
 import manager
 import user
 
-__version__ = '0.55'
+__version__ = '0.56'
