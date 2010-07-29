@@ -132,7 +132,7 @@ class kestrel_tasks(base.base_plugin):
     def _execute(self, name, command, cleanup=False):
         """Wrapper function to open a subprocess."""
         try:
-            task_process = subprocess.Popen(('sh -c "%s"' % command).split(),
+            task_process = subprocess.Popen(['sh', '-c', "%s" % command],
                                             shell=False,
                                             stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE,
