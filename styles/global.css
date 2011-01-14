@@ -1,0 +1,97 @@
+body {
+    font-family: Tahoma, Arial, sans-serif;
+    font-size: 12px;
+}
+
+.hidden {
+    display: none;
+}
+
+label, input {
+    display: block;
+}
+
+#log {
+    font-family: monospace;
+}
+
+#xmpp_console {
+    padding: 10px;
+    height: 250px;
+    border: solid 1px #aaa;
+    background-color: #000;
+    color: #eee;
+    font-family: monospace;
+    overflow: auto;
+}
+
+#xmpp_console .incoming {
+    background-color: #111;
+}
+
+#xmpp_console .xml_punc {
+    color: #888;
+}
+
+#xmpp_console .xml_tag {
+    color: #e77;
+}
+
+#xmpp_console .xml_aname {
+    color: #55d;
+}
+
+#xmpp_console .xml_avalue {
+    color: #77f;
+}
+
+#xmpp_console .xml_text {
+    color: #fff;
+}
+
+#xmpp_console .xml_level0 { 
+    padding-left: 0;
+}
+
+#xmpp_console .xml_level1 {
+    padding-left: 1em;
+}
+
+#xmpp_console .xml_level2 {
+    padding-left: 2em;
+}
+
+#xmpp_console .xml_level3 {
+    padding-left: 3em;
+}
+
+#xmpp_console .xml_level4 {
+    padding-left: 4em;
+}
+
+#xmpp_console .xml_level5 {
+    padding-left: 5em;
+}
+
+#xmpp_console .xml_level6 {
+    padding-left: 6em;
+}
+
+#xmpp_console .xml_level7 {
+    padding-left: 7em;
+}
+
+#xmpp_console .xml_level8 {
+    padding-left: 8em;
+}
+
+#xmpp_console .xml_level9 {
+    padding-left: 9em;
+}
+
+#connection {
+    padding: .3em;
+    float: right;
+    position: relative;
+    z-index: 1;
+}

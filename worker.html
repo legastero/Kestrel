@@ -3,13 +3,43 @@
     <head>
         <title>Kestrel Worker</title>
         <meta charset="utf-8" />
-		<script src="libs/jquery-1.4.4.js" type="text/javascript"></script>
-		<script src="libs/strophe.js" type="text/javascript"></script>
         <link rel="stylesheet" type="text/css" href="styles/global.css" />
+        <link rel="stylesheet" type="text/css" href="styles/flick/jquery-ui-1.8.7.custom.css" />
+		<script src="libs/jquery-1.4.4.min.js" type="text/javascript"></script>
+		<script src="libs/jquery-ui-1.8.7.custom.min.js" type="text/javascript"></script>
+		<script src="libs/strophe.js" type="text/javascript"></script>
+		<script src="libs/mixin.support.js" type="text/javascript"></script>
+		<script src="libs/plugin.0050.js" type="text/javascript"></script>
+        <script src="worker.js" type="text/javascript"></script>
     </head>
     <body>
         <header>
             <h1>Kestrel Worker</h1>
         </header>
+
+        <div id="login_dialog" class="hidden">
+            <form>
+                <label>JID:</label><input type="text" id="jid" />
+                <label>Password:</label><input type="password" id="password" />
+            </form>
+        </div>
+
+        <div id="control_panel">
+          <div id="connection">
+              <input id="connection_button" type="submit" value="Connect" class="button" />
+          </div>
+          <ul>
+              <li><a href="#xmpp_console_tab">XMPP Console</a></li>
+              <li><a href="#log_tab">Log</a></li>
+          </ul>
+          <div id="xmpp_console_tab">
+              <div id="xmpp_console">
+              </div>
+          </div>
+          <div id="log_tab">
+              <ul id="log">
+              </ul>
+          </div>
+        </div>
     </body>
 </html>
