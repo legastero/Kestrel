@@ -1,6 +1,0 @@
-[job]
-queue=5
-command=./run_task.sh
-cleanup=./cleanup.sh
-requires=FOO BAR
-         BAZ

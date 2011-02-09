@@ -17,8 +17,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import worker
-import manager
-import user
+from config import load_config
+from worker import Worker
+from manager import Manager
 
-__version__ = '0.57'
+__version__ = '0.9'

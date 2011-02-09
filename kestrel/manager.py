@@ -17,40 +17,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import sleekxmpp
-import sleekxmpp.componentxmpp as componentxmpp
 import logging
+import random
 
-import kestrel.plugins as plugins
-import kestrel.database as database
-import kestrel.backend as backend
+import sleekxmpp
+from sleekxmpp.xmlstream import JID
 
-class Manager(componentxmpp.ComponentXMPP):
-    def __init__(self, jid, password, config, args):
-        componentxmpp.ComponentXMPP.__init__(self, jid, password,
-                                             config['XMPP'].get('server'),
-                                             int(config['XMPP'].get('port')))
 
-        db_file = os.path.expanduser(config['manager'].get('database', '~/.kestrel/kestrel.db'))
-        print db_file
-        self.db = database.Database('sqlite:///%s' % db_file)
-        self.backend = backend.Backend(self.db, self)
+class Manager(sleekxmpp.ComponentXMPP):
 
-        self.auto_authorize=None
-        self.auto_subscribe=None
+    def __init__(self, jid, password, host, port, config):
+        sleekxmpp.ComponentXMPP.__init__(self, jid, password, host, port)
 
-        self.submit_jid = 'submit@' + self.fulljid
-        self.pool_jid = 'pool@' + self.fulljid
+        if config is None:
+            config = {}
+        self.config = config
 
-        self.special_jids = set((self.submit_jid, self.pool_jid))
+        self.register_plugin('xep_0030')
+        self.register_plugin('xep_0092')
+        self.register_plugin('xep_0004',
+                             module='kestrel.plugins.xep_0004')
+        self.register_plugin('xep_0050',
+                             module='kestrel.plugins.xep_0050')
+        self.register_plugin('xep_0199',
+                             {'keepalive': False},
+                             module='kestrel.plugins.xep_0199')
+        self.register_plugin('redis_backend',
+                             module='kestrel.plugins.redis_backend')
+        self.register_plugin('redis_roster',
+                             module='kestrel.plugins.redis_roster')
+        self.register_plugin('kestrel_pool',
+                             {'pool_jid': JID('pool@%s' % self.boundjid.full)},
+                             module='kestrel.plugins.kestrel_pool')
+        self.register_plugin('kestrel_jobs',
+                             {'job_jid': JID('submit@%s' % self.boundjid.full)},
+                             module='kestrel.plugins.kestrel_jobs')
 
-        self.plugin['kestrel_roster'] = plugins.kestrel_roster(self, {'backend': self.backend,
-                                                                      'component': self.jid,
-                                                                      'specials': self.special_jids})
-        self.plugin['kestrel_pool'] = plugins.kestrel_pool(self, {'backend': self.backend,
-                                                                  'jid': self.pool_jid})
-        self.plugin['kestrel_jobs'] = plugins.kestrel_jobs(self, {'backend': self.backend,
-                                                                  'pool_jid': self.pool_jid,
-                                                                  'jid': self.submit_jid})
-        self.plugin['kestrel_dispatcher'] = plugins.kestrel_dispatcher(self, {'backend': self.backend})
+        self.add_event_handler("session_start", self.start)
+
+        self['xep_0030'].add_identity(jid=self.boundjid.full,
+                                      category='component',
+                                      itype='generic',
+                                      name='Kestrel',
+                                      lang='en')
+
+    def start(self, event):
+        for comp_jid in self.roster:
+            for jid in self.roster[comp_jid]:
+                self.send_presence(pfrom=comp_jid, pto=jid)
+                self.send_presence(pfrom=comp_jid, pto=jid, ptype='probe')

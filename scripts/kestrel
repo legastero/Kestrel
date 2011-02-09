@@ -1,41 +1,35 @@
 #!/usr/bin/env python
 
-# Kestrel: An XMPP-based Job Scheduler
-# Author: Lance Stout <lancestout@gmail.com>
-#
-# Credits: Nathan Fritz <fritzy@netflint.net>
-#
-# Copyright 2010 Lance Stout
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""
+    Kestrel: An XMPP-based Job Scheduler
+    Copyright (C) 2011 Lance Stout
+    This file is part of Kestrel.
+
+    See the file LICENSE for copying permission.
+"""
 
 import os
 import sys
-import time
 import logging
 import optparse
 
-from kestrel import __version__
-from kestrel.config import load_config
-from kestrel.database import Database
-from kestrel.worker import Worker
-from kestrel.manager import Manager
-from kestrel.user import SubmitClient, CancelClient, StatusClient
+from kestrel import __version__, load_config, Worker, Manager
 
+def start_worker(conf):
+    return Worker(conf['worker']['xmpp']['jid'],
+                  conf['worker']['xmpp']['password'],
+                  conf['worker'])
+
+def start_manager(conf):
+    return Manager(conf['manager']['xmpp']['jid'],
+                   conf['manager']['xmpp']['password'],
+                   conf['manager']['xmpp']['server'],
+                   conf['manager']['xmpp']['port'],
+                   conf['manager'])
 
 if __name__ == '__main__':
     opts = optparse.OptionParser(
-        usage="Usage: %prog [options] worker|manager|submit <job file>|cancel <job id>|status [pool|<job id>]",
+        usage="Usage: %prog [options] worker|manager",
         version='%%prog %s' % __version__)
 
     opts.add_option('-q','--quiet',
@@ -60,7 +54,7 @@ if __name__ == '__main__':
                     help=('Alternate location for config file.'),
                     dest='configfile',
                     metavar='FILE',
-                    default=None)
+                    default='~/.kestrelrc')
 
     (options, args) = opts.parse_args()
 
@@ -68,25 +62,16 @@ if __name__ == '__main__':
         opts.print_help()
         sys.exit(1)
 
-    if options.configfile is None:
-        user_roles = ['submit', 'cancel', 'status']
-        if args[0] in user_roles:
-            options.configfile = '~/.kestrel/user.rc'
-        else:
-            options.configfile = '~/.kestrel/%s.rc' % args[0]
-
     conf = load_config(options.configfile)
     logging.basicConfig(level=options.loglevel, format='%(asctime)s %(levelname)-8s %(message)s')
 
-    roles = {'worker': Worker,
-             'manager': Manager,
-             'submit': SubmitClient,
-             'cancel': CancelClient,
-             'status': StatusClient}
-    role = roles.get(args[0], Worker)
+    handlers = {'worker': start_worker,
+                'manager': start_manager}
+    handler = handlers.get(args[0], start_worker)
 
-    xmpp = role(conf['XMPP'].get('jid'), conf['XMPP'].get('password'), conf, args)
-    xmpp.registerPlugin('xep_0030')
+    xmpp = handler(conf)
+
+
 
     if xmpp.connect():
         xmpp.process(threaded=False)

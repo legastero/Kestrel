@@ -27,5 +27,4 @@ setup(name='kestrel',
       scripts=['scripts/kestrel'],
       include_package_data=True,
       zip_safe=False,
-      install_requires=['sleekxmpp',
-                        'sqlalchemy'])
+      install_requires=['sleekxmpp'])
