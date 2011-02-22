@@ -46,12 +46,14 @@ class Manager(sleekxmpp.ComponentXMPP):
                              module='kestrel.plugins.redis_backend')
         self.register_plugin('redis_roster',
                              module='kestrel.plugins.redis_roster')
-        self.register_plugin('kestrel_pool',
-                             {'pool_jid': JID('pool@%s' % self.boundjid.full)},
-                             module='kestrel.plugins.kestrel_pool')
-        self.register_plugin('kestrel_jobs',
-                             {'job_jid': JID('submit@%s' % self.boundjid.full)},
-                             module='kestrel.plugins.kestrel_jobs')
+        self.register_plugin(
+                'kestrel_pool',
+                {'pool_jid': JID('pool@%s' % self.boundjid.full)},
+                module='kestrel.plugins.kestrel_pool')
+        self.register_plugin(
+                'kestrel_jobs',
+                {'job_jid': JID('submit@%s' % self.boundjid.full)},
+                module='kestrel.plugins.kestrel_jobs')
 
         self.add_event_handler("session_start", self.start)
 

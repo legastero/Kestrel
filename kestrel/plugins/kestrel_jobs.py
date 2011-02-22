@@ -8,15 +8,9 @@
 
 
 import logging
-import threading
 
 import sleekxmpp
 from sleekxmpp.plugins import base
-from sleekxmpp.xmlstream.handler import Callback
-from sleekxmpp.xmlstream.matcher import MatchXPath, StanzaPath
-from sleekxmpp.xmlstream.stanzabase import ElementBase, ET, JID
-from sleekxmpp.stanza.iq import Iq
-from sleekxmpp.stanza.roster import Roster
 
 
 log = logging.getLogger(__name__)
