@@ -13,23 +13,89 @@ import sys
 import logging
 import optparse
 
-from kestrel import __version__, load_config, Worker, Manager
+from kestrel import __version__, load_config, Worker, Manager, Client
 
-def start_worker(conf):
-    return Worker(conf['worker']['xmpp']['jid'],
+
+def start_worker(conf, args):
+    xmpp = Worker(conf['worker']['xmpp']['jid'],
                   conf['worker']['xmpp']['password'],
                   conf['worker'])
+    if xmpp.connect():
+        xmpp.process(threaded=False)
+    else:
+        logging.log(logging.CRITICAL, "Unable to connect.")
 
-def start_manager(conf):
-    return Manager(conf['manager']['xmpp']['jid'],
+def start_manager(conf, args):
+    xmpp = Manager(conf['manager']['xmpp']['jid'],
                    conf['manager']['xmpp']['password'],
                    conf['manager']['xmpp']['server'],
                    conf['manager']['xmpp']['port'],
                    conf['manager'])
+    if xmpp.connect():
+        xmpp.process(threaded=False)
+    else:
+        logging.log(logging.CRITICAL, "Unable to connect.")
+
+def start_submit(conf, args):
+    xmpp = Client(conf['client']['xmpp']['jid'],
+                  conf['client']['xmpp']['password'],
+                  conf['client'])
+
+    def run_submit(event):
+        xmpp.submit_job(file=args[0])
+
+    if not args:
+        logging.error("Missing job file.")
+        sys.exit(0)
+
+    xmpp.single_command = True
+    xmpp.add_event_handler('kestrel_start', run_submit)
+
+    if xmpp.connect():
+        xmpp.process(threaded=False)
+    else:
+        logging.log(logging.CRITICAL, "Unable to connect.")
+
+def start_cancel(conf, args):
+    xmpp = Client(conf['client']['xmpp']['jid'],
+                  conf['client']['xmpp']['password'],
+                  conf['client'])
+
+    def run_cancel(event):
+        xmpp.cancel_jobs(args)
+
+    if not args:
+        logging.error("Missing job ID.")
+        sys.exit(0)
+
+    xmpp.single_command = True
+    xmpp.add_event_handler('kestrel_start', run_cancel)
+
+    if xmpp.connect():
+        xmpp.process(threaded=False)
+    else:
+        logging.log(logging.CRITICAL, "Unable to connect.")
+
+def start_status(conf, args):
+    xmpp = Client(conf['client']['xmpp']['jid'],
+                  conf['client']['xmpp']['password'],
+                  conf['client'])
+
+    def run_status(event):
+        xmpp.pool_status()
+
+    xmpp.single_command = True
+    xmpp.add_event_handler('kestrel_start', run_status)
+
+    if xmpp.connect():
+        xmpp.process(threaded=False)
+    else:
+        logging.log(logging.CRITICAL, "Unable to connect.")
+
 
 if __name__ == '__main__':
     opts = optparse.OptionParser(
-        usage="Usage: %prog [options] worker|manager",
+        usage="Usage: %prog [options] worker|manager|submit [<job_file>]",
         version='%%prog %s' % __version__)
 
     opts.add_option('-q','--quiet',
@@ -63,22 +129,13 @@ if __name__ == '__main__':
         sys.exit(1)
 
     conf = load_config(options.configfile)
-    logging.basicConfig(level=options.loglevel, format='%(asctime)s %(levelname)-8s %(message)s')
+    logging.basicConfig(level=options.loglevel, 
+                        format='%(asctime)s %(levelname)-8s %(message)s')
 
     handlers = {'worker': start_worker,
-                'manager': start_manager}
+                'manager': start_manager,
+                'submit': start_submit,
+                'cancel': start_cancel,
+                'status': start_status}
     handler = handlers.get(args[0], start_worker)
-
-    xmpp = handler(conf)
-
-
-
-    if xmpp.connect():
-        xmpp.process(threaded=False)
-        logging.log(logging.INFO, "System disconnecting.")
-        xmpp.disconnect()
-        logging.log(logging.INFO, "System exiting.")
-        sys.exit(0)
-    else:
-        logging.log(logging.CRITICAL, "Unable to connect.")
-
+    handler(conf, args[1:])

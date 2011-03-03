@@ -24,14 +24,15 @@ class WorkerConfig(ElementBase):
     namespace = 'kestrel:config'
     plugin_attrib = name
     interfaces = set(('manager', 'features'))
+    sub_interfaces = interfaces
 
     def get_features(self):
         features = set()
         items = self.findall('{%s}feature' % self.namespace)
-        if items:
+        if items is not None:
             for item in items:
                 features.add(item.text)
-        return items
+        return features
 
 
 class ManagerConfig(ElementBase):
@@ -43,10 +44,21 @@ class ManagerConfig(ElementBase):
     sub_interfaces = interfaces
 
 
+class ClientConfig(ElementBase):
+
+    name = 'client'
+    namespace = 'kestrel:config'
+    plugin_attrib = name
+    interfaces = set(('pool','submit'))
+    sub_interfaces = interfaces
+
+
 register_stanza_plugin(Config, WorkerConfig)
 register_stanza_plugin(Config, ManagerConfig)
+register_stanza_plugin(Config, ClientConfig)
 register_stanza_plugin(WorkerConfig, XMPPConfig)
 register_stanza_plugin(ManagerConfig, XMPPConfig)
+register_stanza_plugin(ClientConfig, XMPPConfig)
 
 
 def load_config(file_name):

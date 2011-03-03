@@ -18,10 +18,10 @@ from sleekxmpp.plugins.base import base_plugin
 log = logging.getLogger(__name__)
 
 
-class redis_backend(base_plugin):
+class redis_queue(base_plugin):
 
     def plugin_init(self):
-        self.description = "Redis backend for Kestrel"
+        self.description = "Redis queue backend for Kestrel"
 
         self.redis = redis.Redis(host=self.config.get('host', 'localhost'),
                                  port=self.config.get('port', 6379),
@@ -46,3 +46,6 @@ class redis_backend(base_plugin):
                                  target=self._handlers[queue])
             t.daemon = True
             t.start()
+
+    def queue(self, name, value):
+        self.redis.rpush(name, value)

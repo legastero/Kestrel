@@ -1,116 +1,111 @@
-# Kestrel: An XMPP-based Job Scheduler
-# Author: Lance Stout <lancestout@gmail.com>
-#
-# Credits: Nathan Fritz <fritzy@netflint.net>
-#
-# Copyright 2010 Lance Stout
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""
+    Kestrel: An XMPP-based Job Scheduler
+    Copyright (C) 2011 Lance Stout
+    This file is part of Kestrel.
+
+    See the file LICENSE for copying permission.
+"""
+
 
 import logging
-import os
-import threading
-import signal
-import subprocess
 
 import sleekxmpp
-from sleekxmpp.plugins import base
-from sleekxmpp.xmlstream.handler.callback import Callback
-from sleekxmpp.xmlstream.matcher.xpath import MatchXPath
-from sleekxmpp.xmlstream.stanzabase import ElementBase, ET, JID
-from sleekxmpp.stanza.iq import Iq
-from sleekxmpp.plugins.xep_0030 import DiscoNode
+from sleekxmpp.plugins.base import base_plugin
 
-from kestrel.plugins.kestrel_jobs import Job
-from kestrel.stanza.status import Status, JobStatus, PoolStatus
 
-class kestrel_client(base.base_plugin):
+log = logging.getLogger(__name__)
+
+
+class kestrel_client(base_plugin):
+
     def plugin_init(self):
         self.description = "Kestrel Client"
-        self.manager = self.config.get('manager', '')
-        self.submit_jid = 'submit@%s' % self.manager
+        self.submit_jid = self.config.get('submit_jid', '')
+        self.pool_jid = self.config.get('pool_jid', '')
 
-        self.xmpp.registerHandler(
-            Callback('Kestrel Job',
-                     MatchXPath('{%s}iq/{%s}job' % (self.xmpp.default_ns,
-                                                    Job.namespace)),
-                     self.handle_job))
-        self.xmpp.stanzaPlugin(Iq, Job)
-
-        self.xmpp.registerHandler(
-            Callback('Kestrel Status',
-                     MatchXPath('{%s}iq/{%s}query' % (self.xmpp.default_ns,
-                                                      Status.namespace)),
-                     self.handle_status))
-        self.xmpp.stanzaPlugin(Iq, Status)
-        self.xmpp.stanzaPlugin(Status, JobStatus)
-        self.xmpp.stanzaPlugin(Status, PoolStatus)
-
-    def handle_job(self, iq):
-        job = iq['kestrel_job']
-        if iq['type'] == 'error':
-            self.xmpp.event('kestrel_error', iq)
-            return
-        events = {'queued': 'kestrel_job_queued',
-                  'cancelled': 'kestrel_job_cancelled',
-                  'complete': 'kestrel_job_complete'}
-        event = events.get(job['status'], 'kestrel_error')
-        self.xmpp.event(event, iq)
-
-    def handle_status(self, iq):
-        self.xmpp.event('kestrel_status', iq)
-
-    def submitJob(self, job):
+    def submit_job(self, job):
         reqs = job.get('requires', '')
         if isinstance(reqs, str):
             reqs = reqs.upper()
             reqs = reqs.split()
             reqs.sort()
-        iq = self.xmpp.makeIq(ifrom=self.xmpp.fulljid)
-        iq['kestrel_job']['action'] = 'submit'
-        iq['kestrel_job']['queue'] = job.get('queue', '1')
-        iq['kestrel_job']['command'] = job.get('command', '')
-        iq['kestrel_job']['cleanup'] = job.get('cleanup', '')
-        iq['kestrel_job']['requirements'] = reqs
-        iq['type'] = 'set'
-        iq['id'] = 'job-submit'
-        iq['to'] = self.submit_jid
-        iq.send(block=False)
 
-    def cancelJob(self, job_id):
-        iq = self.xmpp.makeIq(ifrom=self.xmpp.fulljid)
-        iq['kestrel_job']['action'] = 'cancel'
-        iq['kestrel_job']['id'] = job_id
-        iq['type'] = 'set'
-        iq['id'] = 'job-cancel'
-        iq['to'] = 'job_%s@%s' % (job_id, self.manager)
-        iq.send(block=False)
+        log.debug("Submitting job to %s: %s" % (self.submit_jid, job))
+        iq = self.xmpp['xep_0050'].run_command(self.submit_jid,
+                                               'submit')
+        if iq is not None and iq['type'] != 'error':
+            session = iq['command']['sessionid']
+            form = iq['command']['form']
+            iq = self.xmpp.Iq()
+            iq['to'] = self.submit_jid
+            iq['type'] = 'set'
+            iq['command']['sessionid'] = session
+            iq['command']['node'] = 'submit'
+            iq['command']['action'] = 'next'
+            form = self.xmpp['xep_0004'].makeForm(ftype='submit')
+            form.addField(var='command', value=job['command'])
+            form.addField(var='cleanup', value=job.get('cleanup', ''))
+            form.addField(var='queue', value=job.get('queue', '1'))
+            form.addField(var='requirements', ftype='text-multi',
+                          value="\n".join(reqs))
+            iq['command'].append(form)
+            result = iq.send()
+            if result is not None and result['type'] != 'error':
+                job_id = result['command']['form']['values']['job_id']
+                log.debug("Job accepted as %s", job_id)
+                iq = self.xmpp.Iq()
+                iq['to'] = self.submit_jid
+                iq['type'] = 'set'
+                iq['command']['sessionid'] = session
+                iq['command']['action'] = 'complete'
+                iq['command']['node'] = 'submit'
+                iq.send(block=False)
+                return job_id
+        log.error("Job could not be submitted.")
+        return False
 
-    def statusJob(self, job_id=None):
-        iq = self.xmpp.makeIq(ifrom=self.xmpp.fulljid)
-        iq['kestrel_status']['id'] = job_id
-        iq['type'] = 'get'
-        iq['id']  = 'job-status'
-        if job_id is None:
-            iq['to'] = 'submit@%s' % self.manager
-        else:
-            iq['to'] = 'job_%s@%s' % (job_id, self.manager)
-        iq.send(block=False)
+    def cancel_job(self, job_id):
+        self.cancel_jobs(set((job_id,)))
 
-    def statusPool(self):
-        iq = self.xmpp.makeIq(ifrom=self.xmpp.fulljid)
-        iq['kestrel_status']['id'] = None
-        iq['type'] = 'get'
-        iq['id']  = 'pool-status'
-        iq['to'] = 'pool@%s' % self.manager
-        iq.send(block=False)
+    def cancel_jobs(self, job_ids):
+        iq = self.xmpp['xep_0050'].run_command(self.submit_jid,
+                                               'cancel')
+        if iq is not None and iq['type'] != 'error':
+            session = iq['command']['sessionid']
+            form = iq['command']['form']
+            jobs = form['fields']['job_ids']
+            user_jobs = set([o['value'] for o in jobs.getOptions()])
+            jobs = user_jobs.intersection(job_ids)
+
+            iq = self.xmpp.Iq()
+            iq['to'] = self.submit_jid
+            iq['type'] = 'set'
+            iq['command']['sessionid'] = session
+            iq['command']['node'] = 'cancel'
+
+            if jobs:
+                iq['command']['action'] = 'complete'
+                form = self.xmpp['xep_0004'].makeForm(ftype='submit')
+                form.addField(ftype='list-multi', var='job_ids')
+                form['fields']['job_ids']['value'] = list(jobs)
+                iq['command'].append(form)
+            else:
+                iq['command']['action'] = 'cancel'
+                log.error("No available jobs to cancel.")
+            result = iq.send()
+            if result is not None and result['type'] != 'error':
+                return True
+        log.error("Job could not be cancelled.")
+        return False
+
+    def pool_status(self):
+        iq = self.xmpp['xep_0050'].run_command(self.pool_jid,
+                                               'pool_status')
+        if iq is not None and iq['type'] != 'error':
+            session = iq['command']['sessionid']
+            form = iq['command']['form']
+            return form['values']
+        log.error("Could not obtain the pool's status.")
+        return False
+
+

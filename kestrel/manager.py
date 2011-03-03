@@ -1,21 +1,10 @@
-# Kestrel: An XMPP-based Job Scheduler
-# Author: Lance Stout <lancestout@gmail.com>
-#
-# Credits: Nathan Fritz <fritzy@netflint.net>
-#
-# Copyright 2010 Lance Stout
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""
+    Kestrel: An XMPP-based Job Scheduler
+    Copyright (C) 2011 Lance Stout
+    This file is part of Kestrel.
+
+    See the file LICENSE for copying permission.
+"""
 
 import logging
 import random
@@ -29,8 +18,6 @@ class Manager(sleekxmpp.ComponentXMPP):
     def __init__(self, jid, password, host, port, config):
         sleekxmpp.ComponentXMPP.__init__(self, jid, password, host, port)
 
-        if config is None:
-            config = {}
         self.config = config
 
         self.register_plugin('xep_0030')
@@ -40,20 +27,16 @@ class Manager(sleekxmpp.ComponentXMPP):
         self.register_plugin('xep_0050',
                              module='kestrel.plugins.xep_0050')
         self.register_plugin('xep_0199',
-                             {'keepalive': False},
-                             module='kestrel.plugins.xep_0199')
-        self.register_plugin('redis_backend',
-                             module='kestrel.plugins.redis_backend')
+                             {'keepalive': False})
+        self.register_plugin('redis_queue',
+                             module='kestrel.plugins.redis_queue')
         self.register_plugin('redis_roster',
                              module='kestrel.plugins.redis_roster')
         self.register_plugin(
-                'kestrel_pool',
-                {'pool_jid': JID('pool@%s' % self.boundjid.full)},
-                module='kestrel.plugins.kestrel_pool')
-        self.register_plugin(
-                'kestrel_jobs',
-                {'job_jid': JID('submit@%s' % self.boundjid.full)},
-                module='kestrel.plugins.kestrel_jobs')
+                'kestrel_manager',
+                {'pool_jid': JID(self.config['pool']),
+                 'job_jid': JID(self.config['jobs'])},
+                module='kestrel.plugins.kestrel_manager')
 
         self.add_event_handler("session_start", self.start)
 

@@ -266,12 +266,17 @@ class xep_0050(base_plugin):
                                                node=Command.namespace,
                                                **kwargs)
 
-    def run_command(self, jid, node, ifrom=None, **kwargs):
+    def run_command(self, jid, node, ifrom=None, action='execute',
+                    payload=None, sessionid=None, **kwargs):
         iq = self.xmpp.Iq()
         iq['type'] = 'set'
         iq['to'] = jid
         if ifrom:
             iq['from'] = ifrom
         iq['command']['node'] = node
-        iq['command']['action'] = 'execute'
+        iq['command']['action'] = action
+        if sessionid is not None:
+            iq['command']['sessionid'] = sessionid
+        if payload is not None:
+            iq['command'].append(payload)
         return iq.send(**kwargs)

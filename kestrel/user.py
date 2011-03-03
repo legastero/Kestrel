@@ -1,113 +1,101 @@
-# Kestrel: An XMPP-based Job Scheduler
-# Author: Lance Stout <lancestout@gmail.com>
-#
-# Credits: Nathan Fritz <fritzy@netflint.net>
-#
-# Copyright 2010 Lance Stout
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""
+    Kestrel: An XMPP-based Job Scheduler
+    Copyright (C) 2011 Lance Stout
+    This file is part of Kestrel.
 
+    See the file LICENSE for copying permission.
+"""
+
+import os
 import logging
 import sleekxmpp
+try:
+    from ConfigParser import ConfigParser
+except:
+    from configparser import ConfigParser
 
-from sleekxmpp.stanza.iq import Iq
-from sleekxmpp.xmlstream.handler.callback import Callback
-from sleekxmpp.xmlstream.matcher.xpath import MatchXPath
 
-import kestrel.plugins as plugins
-from kestrel.config import load_config
+log = logging.getLogger(__name__)
+
+
+def read_job(file):
+    """
+    Read job data from a file in the standard INI config format.
+
+    Example:
+        [job]
+        queue=5
+        command=./run_task.sh
+        cleanup=./cleanup.sh
+        requires=FOO BAR
+                 BAZ
+    """
+    data = {}
+    parser = ConfigParser()
+
+    try:
+        parser.read(os.path.expanduser(file))
+    except ConfigParser.MissingSectionHeaderError:
+        log.error('ERROR: Configuration file is invalid.\n')
+        sys.exit()
+
+    sections = parser.sections()
+    for section in sections:
+        data[section] = {}
+        options = parser.options(section)
+        for option in options:
+            data[section][option] = parser.get(section, option)
+    return data['job']
 
 
 class Client(sleekxmpp.ClientXMPP):
-    def __init__(self, jid, password, config, args):
+
+    def __init__(self, jid, password, config):
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
         self.config = config
-        self.manager = config['user'].get('manager', '')
-        self.data = args[1] if len(args) >= 2 else None
+        self.single_command = True
 
-        self.plugin['kestrel_client'] = plugins.kestrel_client(self, {'manager': self.manager})
+        self.register_plugin('xep_0030')
+        self.register_plugin('xep_0004',
+                             module='kestrel.plugins.xep_0004')
+        self.register_plugin('xep_0050',
+                             module='kestrel.plugins.xep_0050')
+        self.register_plugin('kestrel_client',
+                             {'submit_jid': config['submit'],
+                              'pool_jid': config['pool']},
+                             module='kestrel.plugins.kestrel_client')
 
         self.add_event_handler("session_start", self.start)
-        self.add_event_handler('kestrel_error', self.handle_error)
-
-        self.setup()
-
-    def setup():
-        pass
 
     def start(self, event):
-        self.getRoster()
-        self.sendPresence()
+        self.get_roster()
+        self.send_presence()
+        self.event('kestrel_start')
 
-    def handle_error(self, iq):
-        print "There was an error in your request."
+    def submit_job(self, job=None, file=None):
+        if file:
+            job = read_job(file)
+        if job:
+            job_id = self['kestrel_client'].submit_job(job)
+        logging.info('Job accepted. ID: %s' % job_id)
+        if self.single_command:
+            self.disconnect()
 
+    def cancel_jobs(self, job_ids):
+        job_ids = set(job_ids)
+        self['kestrel_client'].cancel_jobs(job_ids)
+        if self.single_command:
+            self.disconnect()
 
-class SubmitClient(Client): 
-    def setup(self):
-        self.add_event_handler('session_start', self.do_submit)
-        self.add_event_handler('kestrel_job_queued', self.handle_result, threaded=True)
-    
-    def do_submit(self, event):
-        job = load_config(self.data)
-        job = job.get('job', {})
-        self['kestrel_client'].submitJob(job)
+    def status_job(self, job_id=None):
+        if self.single_command:
+            self.disconnect()
 
-    def handle_result(self, iq):
-        job = iq['kestrel_job']
-        if job['status'] == 'queued':
-            print 'Job accepted.'
-            print 'Job ID: %s' % job['id']
-        self.disconnect()
-
-
-class CancelClient(Client): 
-    def setup(self):
-        self.add_event_handler('session_start', self.do_cancel)
-        self.add_event_handler('kestrel_job_cancelled', self.handle_result, threaded=True)
-        
-    def do_cancel(self, event):
-        self['kestrel_client'].cancelJob(self.data)
-
-    def handle_result(self, iq):
-        job = iq['kestrel_job']
-        if job['status'] == 'cancelled':
-            print 'Job cancelled.'
-        self.disconnect()
-
-class StatusClient(Client):
-    def setup(self):
-        self.add_event_handler('session_start', self.do_status)
-        self.add_event_handler('kestrel_status', self.handle_status, threaded=True)
-
-    def do_status(self, event):
-        if self.data == 'pool':
-            self['kestrel_client'].statusPool()
-        else:
-            self['kestrel_client'].statusJob(self.data)
-
-    def handle_status(self, iq):
-        status = iq['kestrel_status']
-        if status['pool']['online']:
-            print 'Kestrel Pool Status:'
-            print '   Online: %(online)s\nAvailable: %(available)s\n     Busy: %(busy)s' % status['pool']
-        if len(status['jobs']) > 0:       
-            print 'Kestrel Jobs Status: (requested) queued/running/completed'
-            for job in status['jobs']:
-                print '  Job %(id)s: (%(requested)s) %(queued)s/%(running)s/%(completed)s - %(owner)s' % job
-        self.disconnect()
-
-
-
-
+    def pool_status(self):
+        status = self['kestrel_client'].pool_status()
+        logging.info("   Online Workers: %s" % status['online_workers'])
+        logging.info("Available Workers: %s" % status['available_workers'])
+        logging.info("     Busy Workers: %s" % status['busy_workers'])
+        if self.single_command:
+            self.disconnect()
