@@ -89,6 +89,8 @@ class Client(sleekxmpp.ClientXMPP):
             self.disconnect()
 
     def status_job(self, job_id=None):
+        status = self['kestrel_client'].job_status(job_id)
+        logging.info(status)
         if self.single_command:
             self.disconnect()
 

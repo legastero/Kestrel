@@ -94,11 +94,14 @@ class xep_0050(base_plugin):
                                     threaded=self.threaded)
 
         self.commands = {}
-        self.sessions = {}
+        self.sessions = self.config.get('session_db', {})
 
     def post_init(self):
         base_plugin.post_init(self)
         self.xmpp['xep_0030'].add_feature(Command.namespace)
+
+    def set_backend(self, db):
+        self.sessions = db
 
     def add_command(self, jid=None, node=None, name='', handler=None):
         if jid is None:
@@ -149,6 +152,7 @@ class xep_0050(base_plugin):
                            'to': iq['to'],
                            'payload': None,
                            'interface': '',
+                           'payload_class': None,
                            'has_next': False,
                            'allow_complete': False,
                            'past': [],
@@ -160,8 +164,10 @@ class xep_0050(base_plugin):
         payload = session['payload']
         register_stanza_plugin(Command, payload.__class__)
         session['interface'] = payload.plugin_attrib
+        session['payload_class'] = payload.__class__
 
         self.sessions[sessionid] = session
+        session = self.sessions[sessionid]
 
         iq.reply()
         iq['command']['sessionid'] = sessionid
@@ -218,6 +224,7 @@ class xep_0050(base_plugin):
         session['interface'] = payload.plugin_attrib
 
         self.sessions[sessionid] = session
+        session = self.sessions[sessionid]
 
         register_stanza_plugin(Command, payload.__class__)
 

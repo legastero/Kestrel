@@ -43,21 +43,24 @@ class kestrel_manager(base.base_plugin):
                                     threaded=True)
         self.xmpp.add_event_handler('changed_status',
                                     self._handle_changed_status)
-
-        backend.add_queue_handler('workers:queue:register',
-                                  self._handle_register_worker)
-        backend.add_queue_handler('workers:queue:available',
-                                  self._handle_worker_available)
-        backend.add_queue_handler('workers:queue:busy',
-                                  self.kestrel.worker_busy)
-        backend.add_queue_handler('workers:queue:offline',
-                                  self._handle_worker_offline)
-        backend.add_queue_handler('jobs:queue:submit',
-                                  self._handle_submit_job)
-        backend.add_queue_handler('jobs:queue:cancel',
-                                  self._handle_cancel_job)
-        #backend.add_queue_handler('jobs:queue:complete',
-        #                          self._handle_complete_job)
+        self.xmpp.add_event_handler('kestrel_register_worker',
+                                    self._handle_register_worker,
+                                    threaded=True)
+        self.xmpp.add_event_handler('kestrel_worker_available',
+                                    self._handle_worker_available,
+                                    threaded=True)
+        self.xmpp.add_event_handler('kestrel_worker_busy',
+                                    self.kestrel.worker_busy,
+                                    threaded=True)
+        self.xmpp.add_event_handler('kestrel_worker_offline',
+                                    self._handle_worker_offline,
+                                    threaded=True)
+        self.xmpp.add_event_handler('kestrel_job_submit',
+                                    self._handle_submit_job,
+                                    threaded=True)
+        self.xmpp.add_event_handler('kestrel_job_cancel',
+                                    self._handle_cancel_job,
+                                    threaded=True)
 
     def post_init(self):
         base.base_plugin.post_init(self)
@@ -199,11 +202,11 @@ class kestrel_manager(base.base_plugin):
         if not self.kestrel.known_worker(jid):
             return
         elif presence['type'] == 'unavailable':
-            self.xmpp['redis_queue'].queue('workers:queue:offline', jid)
+            self.xmpp.event('kestrel_worker_offline', jid)
         elif presence['type'] in ['dnd', 'xa', 'away']:
-            self.xmpp['redis_queue'].queue('workers:queue:busy', jid)
+            self.xmpp.event('kestrel_worker_busy', jid)
         elif presence['type'] in ['available', 'chat']:
-            self.xmpp['redis_queue'].queue('workers:queue:available', jid)
+            self.xmpp.event('kestrel_worker_available', jid)
 
     def _handle_subscribed(self, presence):
         self.xmpp.send_presence(pto=presence['from'],
@@ -211,7 +214,7 @@ class kestrel_manager(base.base_plugin):
                                 ptype='probe')
 
     def _handle_ping_error(self, iq):
-        self.kestrel.offline_worker(iq['from'].full)
+        self.kestrel.worker_offline(iq['from'].full)
 
     def _handle_disco_info(self, jid, node, data):
         info = self.xmpp['xep_0030'].stanza.DiscoInfo()
@@ -290,20 +293,6 @@ class kestrel_manager(base.base_plugin):
         return session
 
     def _handle_join_command(self, form, session):
-
-        def join(form, session):
-            worker = session['from']
-            caps = form['values']['capabilities'].split('\n')
-            self.xmpp['redis_queue'].queue('workers:queue:register',
-                                           '%s|%s' % (worker, '|'.join(caps)))
-
-            if worker.bare in self.xmpp.roster[self.pool_jid.bare]:
-                self.xmpp.send_presence(pto=worker.full,
-                                        ptype='probe',
-                                        pfrom=self.pool_jid.full)
-            else:
-                self.xmpp.roster[self.pool_jid.bare].subscribe(worker.bare)
-
         form = self.xmpp['xep_0004'].makeForm(ftype='form')
         form['title'] = 'Join Pool'
         form.addField(var='capabilities',
@@ -311,9 +300,23 @@ class kestrel_manager(base.base_plugin):
                       ftype='text-multi')
 
         session['payload'] = form
-        session['next'] = join
+        session['next'] = self._handle_join_command_complete
         session['has_next'] = False
         session['allow_complete'] = True
+
+        return session
+
+    def _handle_join_command_complete(self, form, session):
+        worker = session['from']
+        caps = set(form['values']['capabilities'].split('\n'))
+        self.xmpp.event('kestrel_register_worker', (worker, caps))
+
+        if worker.bare in self.xmpp.roster[self.pool_jid.bare]:
+            self.xmpp.send_presence(pto=worker.full,
+                                    ptype='probe',
+                                    pfrom=self.pool_jid.full)
+        else:
+            self.xmpp.roster[self.pool_jid.bare].subscribe(worker.bare)
 
         return session
 
@@ -324,6 +327,7 @@ class kestrel_manager(base.base_plugin):
         form.addReported(var='owner', label='Owner')
         form.addReported(var='requested', label='Requested')
         form.addReported(var='queued', label='Queued')
+        form.addReported(var='pending', label='Pending')
         form.addReported(var='running', label='Running')
         form.addReported(var='completed', label='Completed')
 
@@ -339,35 +343,6 @@ class kestrel_manager(base.base_plugin):
         return session
 
     def _handle_submit_command(self, form, session):
-
-        def submit(form, session):
-            id = self.kestrel.job_id()
-
-            entry = (id,
-                     session['from'].bare,
-                     form['values']['command'],
-                     form['values'].get('cleanup', ''),
-                     form['values']['queue'])
-
-            reqs = form['values']['requirements'].split("\n")
-            entry = '|'.join(entry) + '|' + '|'.join(reqs)
-            log.debug(entry)
-            self.xmpp['redis_queue'].queue('jobs:queue:submit', entry)
-
-            form = self.xmpp['xep_0004'].makeForm(ftype='result')
-            form['title'] = 'Job Submitted'
-            form.addField(ftype='text-single',
-                          var='job_id',
-                          label='Job ID',
-                          value=id)
-
-            session['payload'] = form
-            session['next'] = lambda f, s: s
-            session['has_next'] = False
-            session['allow_complete'] = True
-
-            return session
-
         form = self.xmpp['xep_0004'].makeForm(ftype='form')
         form['title'] = 'Submit Job'
         form.addField(ftype='text-single',
@@ -388,23 +363,41 @@ class kestrel_manager(base.base_plugin):
                       desc='One requirement per line')
 
         session['payload'] = form
-        session['next'] = submit
+        session['next'] = self._handle_submit_command_complete
         session['has_next'] = True
 
         return session
 
+    def _handle_submit_command_complete(self, form, session):
+        id = self.kestrel.job_id()
+        reqs = set(form['values']['requirements'].split("\n"))
+        job = {'id': id,
+               'owner': session['from'].bare,
+               'command': form['values']['command'],
+               'cleanup': form['values'].get('cleanup', ''),
+               'size': form['values']['queue'],
+               'requirements': reqs}
+
+        self.xmpp.event('kestrel_job_submit', job)
+
+        form = self.xmpp['xep_0004'].makeForm(ftype='result')
+        form['title'] = 'Job Submitted'
+        form.addField(ftype='text-single',
+                      var='job_id',
+                      label='Job ID',
+                      value=id)
+
+        def complete(form, session):
+            pass
+
+        session['payload'] = form
+        session['next'] = complete
+        session['has_next'] = False
+        session['allow_complete'] = True
+
+        return session
+
     def _handle_cancel_command(self, form, session):
-
-
-        def cancel(form, session):
-            user = session['from'].bare
-            jobs = form['values']['job_ids']
-            for job in jobs:
-                self.xmpp['redis_queue'].queue('jobs:queue:cancel',
-                                               '%s|%s' % (user, job))
-            session['payload'] = None
-            return session
-
         user = session['from'].bare
         user_jobs = self.kestrel.user_jobs(user)
 
@@ -417,27 +410,73 @@ class kestrel_manager(base.base_plugin):
             form['fields']['job_ids'].addOption(label='Job %s' % job,
                                                 value=job)
         session['payload'] = form
-        session['next'] = cancel
+        session['next'] = self._handle_cancel_command_complete
         session['has_next'] = False
         session['allow_complete'] = True
+
         return session
 
-    def _handle_submit_job(self, data):
-        parts = data.split('|')
-        id, owner, command, cleanup, queue = parts[0:5]
-        reqs = set(parts[5:])
-        matches = self.kestrel.submit_job(id, owner, command, cleanup, queue, reqs)
+    def _handle_cancel_command_complete(self, form, session):
+        user = session['from'].bare
+        jobs = form['values']['job_ids']
+        for job in jobs:
+            self.xmpp.event('kestrel_job_cancel', (user, job))
+        session['payload'] = None
+
+        return session
+
+    def _handle_submit_job(self, job):
+        matches = self.kestrel.submit_job(
+                    job['id'],
+                    job['owner'],
+                    job['command'],
+                    job['cleanup'],
+                    job['size'],
+                    job['requirements'])
 
     def _handle_cancel_job(self, data):
-        user, job = data.split('|')
+        user, job = data
         cancellations = self.kestrel.cancel_job(user, job)
 
     def _handle_register_worker(self, data):
-        data = data.split('|')
-        self.kestrel.register_worker(data[0], set(data[1:]))
+        worker, caps = data
+        self.kestrel.register_worker(worker, caps)
 
     def _handle_worker_available(self, worker):
         task = self.kestrel.worker_available(worker)
+        if not task:
+            return
+        job = self.kestrel.get_job(task[0])
+        node = 'run_task'
+        cmd = self.xmpp['xep_0050'].run_command(worker, node,
+                                                ifrom=self.pool_jid)
+        if cmd and cmd['type'] != 'error':
+            self.kestrel.task_start(worker, task[0], task[1])
+            session = cmd['command']['sessionid']
+            form = self.xmpp['xep_0004'].makeForm()
+            form['type'] = 'result'
+            form.addField(var='command',
+                          value='%s %s' % (job['command'], task[1]))
+            next = self.xmpp['xep_0050'].run_command(
+                    worker, node,
+                    sessionid=session,
+                    action='next',
+                    payload=form,
+                    timeout=60*60*24*365,
+                    ifrom=self.pool_jid)
+            self.kestrel.task_finish(worker, task[0], task[1])
+            form = self.xmpp['xep_0004'].makeForm()
+            form['type'] = 'result'
+            form.addField(var='cleanup', value=job['cleanup'])
+            self.xmpp['xep_0050'].run_command(
+                    worker, node,
+                    sessionid=session,
+                    action='complete',
+                    payload=form,
+                    block=False,
+                    ifrom=self.pool_jid)
+        else:
+            self.kestrel.task_reset(worker, task)
 
     def _handle_worker_offline(self, worker):
         resets = self.kestrel.worker_offline(worker)

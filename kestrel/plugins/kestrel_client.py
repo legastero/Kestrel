@@ -108,4 +108,13 @@ class kestrel_client(base_plugin):
         log.error("Could not obtain the pool's status.")
         return False
 
+    def job_status(self, job_id=None):
+        iq = self.xmpp['xep_0050'].run_command(self.submit_jid,
+                                               'status')
+        if iq is not None and iq['type'] != 'error':
+            session = iq['command']['sessionid']
+            form = iq['command']['form']
+            return form['items']
+        log.error("Could not obtain the job's status.")
+        return False
 

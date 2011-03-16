@@ -51,6 +51,7 @@ class Worker(sleekxmpp.ClientXMPP):
             resp = self['xep_0050'].run_command(jid=self.manager,
                                                 node='join_pool')
             if resp['type'] == 'result':
+                sessionid = resp['command']['sessionid']
                 caps = self.config['features']
                 form = self['xep_0004'].makeForm(ftype='submit')
                 form.addField(ftype='text-multi',
