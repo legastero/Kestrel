@@ -177,9 +177,13 @@ class Kestrel(object):
     def task_finish(self, worker, job, task):
         job, task = str(job), str(task)
         log.debug('TASK: Task %s,%s finished by %s' % (job, task, worker))
-        self.redis.smove('job:%s:tasks:running' % job,
-                         'job:%s:tasks:completed' % job,
-                         task)
+        p = self.redis.pipeline()
+        p.smove('job:%s:tasks:running' % job,
+                'job:%s:tasks:completed' % job,
+                task)
+        p.srem('worker:%s:tasks' % worker, '%s,%s' % (job, task))
+        p.delete('job:%s:task:%s' % (job, task), worker)
+        p.execute()
         job_size = int(self.redis.get('job:%s:size' % job))
         num_completed = self.redis.scard('job:%s:tasks:completed' % job)
         if num_completed == job_size:
@@ -187,8 +191,19 @@ class Kestrel(object):
             return True
         return False
 
-    def task_reset(self, worker, task):
-        pass
+    def task_reset(self, worker, job, task):
+        log.debug('TASK: Task %s,%s for %s reset.' % (job, task, worker))
+        p = self.redis.pipeline()
+        p.smove('job:%s:tasks:pending' % job,
+                'job:%s:tasks:queued' % job,
+                task)
+        p.smove('job:%s:tasks:running' % job,
+                'job:%s:tasks:queued' % job,
+                task)
+        p.delete('job:%s:task:%s:is_pending' % (job, task))
+        p.srem('worker:%s:tasks' % worker, '%s,%s' % (job, task))
+        p.delete('job:%s:task:%s' % (job, task), worker)
+        p.execute()
 
     def job_status(self, job=None):
         if job is None:
@@ -247,6 +262,7 @@ class Kestrel(object):
 
     def get_job(self, job):
         data = {}
+        data['id'] = job
         data['owner'] = self.redis.get('job:%s:owner' % job)
         data['command'] = self.redis.get('job:%s:command' % job)
         data['cleanup'] = self.redis.get('job:%s:cleanup' % job)

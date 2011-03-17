@@ -61,6 +61,9 @@ class kestrel_manager(base.base_plugin):
         self.xmpp.add_event_handler('kestrel_job_cancel',
                                     self._handle_cancel_job,
                                     threaded=True)
+        self.xmpp.add_event_handler('kestrel_job_complete',
+                                    self._handle_complete_job,
+                                    threaded=True)
 
     def post_init(self):
         base.base_plugin.post_init(self)
@@ -198,7 +201,8 @@ class kestrel_manager(base.base_plugin):
 
     def _handle_changed_status(self, presence):
         jid = presence['from'].jid
-
+        if presence['to'].full != self.pool_jid.full:
+            return
         if not self.kestrel.known_worker(jid):
             return
         elif presence['type'] == 'unavailable':
@@ -431,6 +435,10 @@ class kestrel_manager(base.base_plugin):
                     job['size'],
                     job['requirements'])
         log.debug("MATCHES: %s" % str(matches))
+        if matches:
+            for job in matches:
+                for task in matches[job]:
+                    pass
 
     def _handle_cancel_job(self, data):
         user, job = data
@@ -462,7 +470,8 @@ class kestrel_manager(base.base_plugin):
                     payload=form,
                     timeout=60*60*24*365,
                     ifrom=self.pool_jid)
-            self.kestrel.task_finish(worker, task[0], task[1])
+            if self.kestrel.task_finish(worker, task[0], task[1]):
+                self.xmpp.event('kestrel_job_complete', task[0])
             form = self.xmpp['xep_0004'].makeForm()
             form['type'] = 'result'
             form.addField(var='cleanup', value=job['cleanup'])
@@ -477,4 +486,17 @@ class kestrel_manager(base.base_plugin):
             self.kestrel.task_reset(worker, task)
 
     def _handle_worker_offline(self, worker):
+        log.debug('WORKER: %s offline' % worker)
         resets = self.kestrel.worker_offline(worker)
+        if resets:
+            log.debug('RESETS: %s' % str(resets))
+            for job in resets:
+                for task in resets[job]:
+                    self.kestrel.task_reset(worker, job, task)
+
+    def _handle_complete_job(self, job):
+        job = self.kestrel.get_job(job)
+        self.xmpp.send_message(mto=job['owner'],
+                               mfrom=self.job_jid,
+                               mbody='Job %s has completed.' % job['id'])
+        log.debug('JOB: Job %s has completed' % job['id'])
