@@ -387,11 +387,8 @@ class kestrel_manager(base.base_plugin):
                       label='Job ID',
                       value=id)
 
-        def complete(form, session):
-            pass
-
         session['payload'] = form
-        session['next'] = complete
+        session['next'] = None
         session['has_next'] = False
         session['allow_complete'] = True
 
@@ -433,6 +430,7 @@ class kestrel_manager(base.base_plugin):
                     job['cleanup'],
                     job['size'],
                     job['requirements'])
+        log.debug("MATCHES: %s" % str(matches))
 
     def _handle_cancel_job(self, data):
         user, job = data

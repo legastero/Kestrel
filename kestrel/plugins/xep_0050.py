@@ -197,7 +197,8 @@ class xep_0050(base_plugin):
         interface = session['interface']
         results = iq['command'][interface]
 
-        handler(results, session)
+        if handler:
+            handler(results, session)
 
         iq.reply()
         iq['command']['node'] = node
