@@ -49,15 +49,16 @@ class redis_adhoc(base_plugin):
     def post_init(self):
         """"""
         self.xmpp['xep_0050'].set_backend(self)
+        self.xmpp['xep_0050'].prep_handlers = self.prep_handlers
 
-    def prep_handlers(self, sessionid, funcs):
+    def prep_handlers(self, funcs, prefix=''):
         """
         Save a copy of hashed functions so they can
         be retrieved later.
         """
         for func in funcs:
-            func_hash = hash(func.__name__)
-            self.funcs[sessionid][func_hash] = func
+            func_hash = prefix + str(hash(func.__name__))
+            self.funcs[func_hash] = func
 
     def keys(self):
         """Return a list of session ID values."""

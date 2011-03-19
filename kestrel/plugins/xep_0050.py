@@ -327,6 +327,7 @@ class xep_0050(base_plugin):
         iq['to'] = jid
         if ifrom:
             iq['from'] = ifrom
+            session['from'] = ifrom
         iq['command']['node'] = node
         iq['command']['action'] = 'execute'
         sessionid = 'client:pending_' + iq['id']

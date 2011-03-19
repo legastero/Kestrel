@@ -124,6 +124,12 @@ class kestrel_manager(base.base_plugin):
                     node=node[1],
                     handlers=node[2])
 
+        self.xmpp['xep_0050'].prep_handlers(
+                [self._dispatch_task_next,
+                 self._dispatch_task_command,
+                 self._dispatch_task_error],
+                prefix='dispatch_task:')
+
     def clean_pool(self, event):
         log.debug("Clean the worker pool.")
         self.kestrel.clean()
@@ -207,18 +213,19 @@ class kestrel_manager(base.base_plugin):
         return items
 
     def _handle_submit_job(self, job):
-        matches = self.kestrel.submit_job(
-                    job['id'],
-                    job['owner'],
-                    job['command'],
-                    job['cleanup'],
-                    job['size'],
-                    job['requirements'])
-        log.debug("MATCHES: %s" % str(matches))
+        job, matches = self.kestrel.submit_job(
+                job['id'],
+                job['owner'],
+                job['command'],
+                job['cleanup'],
+                job['size'],
+                job['requirements'])
+        log.debug("MATCHES: %s %s" % (job, matches))
+        job = self.kestrel.get_job(job)
         if matches:
-            for job in matches:
-                for task in matches[job]:
-                    pass
+            for task in matches:
+                worker = matches[task]
+                self._dispatch_task(worker, job, task)
 
     def _handle_cancel_job(self, data):
         user, job = data
@@ -232,38 +239,9 @@ class kestrel_manager(base.base_plugin):
         task = self.kestrel.worker_available(worker)
         if not task:
             return
+        log.debug('MATCH: %s %s, %s' % (worker, task[0], task[1]))
         job = self.kestrel.get_job(task[0])
-        node = 'run_task'
-        cmd = self.xmpp['xep_0050'].run_command(worker, node,
-                                                ifrom=self.pool_jid)
-        if cmd and cmd['type'] != 'error':
-            self.kestrel.task_start(worker, task[0], task[1])
-            session = cmd['command']['sessionid']
-            form = self.xmpp['xep_0004'].makeForm()
-            form['type'] = 'result'
-            form.addField(var='command',
-                          value='%s %s' % (job['command'], task[1]))
-            next = self.xmpp['xep_0050'].run_command(
-                    worker, node,
-                    sessionid=session,
-                    action='next',
-                    payload=form,
-                    timeout=60*60*24*365,
-                    ifrom=self.pool_jid)
-            if self.kestrel.task_finish(worker, task[0], task[1]):
-                self.xmpp.event('kestrel_job_complete', task[0])
-            form = self.xmpp['xep_0004'].makeForm()
-            form['type'] = 'result'
-            form.addField(var='cleanup', value=job['cleanup'])
-            self.xmpp['xep_0050'].run_command(
-                    worker, node,
-                    sessionid=session,
-                    action='complete',
-                    payload=form,
-                    block=False,
-                    ifrom=self.pool_jid)
-        else:
-            self.kestrel.task_reset(worker, task)
+        self._dispatch_task(worker, job, task[1])
 
     def _handle_worker_busy(self, worker):
         log.debug('WORKER: %s busy' % worker)
@@ -284,3 +262,56 @@ class kestrel_manager(base.base_plugin):
                                mfrom=self.job_jid,
                                mbody='Job %s has completed.' % job['id'])
         log.debug('JOB: Job %s has completed' % job['id'])
+
+    def _dispatch_task(self, worker, job, task):
+        self.kestrel.task_start(worker, job['id'], task)
+        session = {
+            'worker': worker,
+            'job_id': job['id'],
+            'job': job,
+            'task': task,
+            'next': self._dispatch_task_next,
+            'error': self._dispatch_task_error
+        }
+        self.xmpp['xep_0050'].start_command(worker,
+                                            'run_task',
+                                            session,
+                                            ifrom=self.pool_jid.full)
+
+    def _dispatch_task_next(self, iq, session):
+        log.debug('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        job = session['job']
+        task = session['task']
+
+        form = self.xmpp['xep_0004'].makeForm(ftype='submit')
+        form.addField(var='command',
+                      value='%s %s' % (job['command'], task))
+
+        session['payload'] = form
+        session['next'] = self._dispatch_task_command
+
+        self.xmpp['xep_0050'].continue_command(session)
+
+    def _dispatch_task_command(self, iq, session):
+        log.debug('222222>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        job = session['job']
+        task = session['task']
+
+        if self.kestrel.task_finish(session['worker'],
+                                    session['job_id'],
+                                    session['task']):
+            self.xmpp.event('kestrel_job_complete', job['id'])
+
+        form = self.xmpp['xep_0004'].makeForm()
+        form['type'] = 'submit'
+        form.addField(var='cleanup', value=job['cleanup'])
+
+        session['payload'] = form
+        session['next'] = None
+
+        self.xmpp['xep_0050'].complete_command(session)
+
+    def _dispatch_task_error(self, iq, session):
+        self.kestrel.task_reset(session['worker'],
+                                session['job'],
+                                session['task'])

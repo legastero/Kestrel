@@ -48,7 +48,7 @@ class Worker(sleekxmpp.ClientXMPP):
 
     def manager_online(self, presence=None, direct=False):
         if direct or presence['from'] == self.manager:
-            resp = self['xep_0050'].run_command(jid=self.manager,
+            resp = self['xep_0050'].send_command(jid=self.manager,
                                                 node='join_pool')
             if resp['type'] == 'result':
                 sessionid = resp['command']['sessionid']
@@ -57,7 +57,7 @@ class Worker(sleekxmpp.ClientXMPP):
                 form.addField(ftype='text-multi',
                               var='capabilities',
                               value="\n".join(caps))
-                self['xep_0050'].run_command(jid=self.manager,
+                self['xep_0050'].send_command(jid=self.manager,
                                              node='join_pool',
                                              sessionid=sessionid,
                                              action='complete',

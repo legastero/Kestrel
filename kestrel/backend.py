@@ -17,7 +17,7 @@ class Kestrel(object):
 
     def register_worker(self, name, capabilities):
         log.debug('POOL: Register %s' % name)
-        capabilities = set(capabilities)
+        capabilities = set([cap.upper() for cap in capabilities])
         jobs = self.redis.smembers('jobs:queued')
         worker_jobs = set()
         for job in jobs:
