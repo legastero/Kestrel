@@ -78,6 +78,16 @@ class xep_0050(base_plugin):
                          StanzaPath('iq@type=set/command'),
                          self._handle_command))
 
+        self.xmpp.register_handler(
+                Callback("Ad-Hoc Result",
+                         StanzaPath('iq@type=result/command'),
+                         self._handle_command_result))
+
+        self.xmpp.register_handler(
+                Callback("Ad-Hoc Error",
+                         StanzaPath('iq@type=error/command'),
+                         self._handle_command_result))
+
         register_stanza_plugin(Iq, Command)
 
         self.xmpp.add_event_handler('command_execute',
@@ -102,6 +112,21 @@ class xep_0050(base_plugin):
 
     def set_backend(self, db):
         self.sessions = db
+
+    def prep_handlers(self, handlers, **kwargs):
+        """
+        Prepare a list of functions for use by the backend service.
+
+        Intended to be replaced by the backend service as needed.
+
+        Arguments:
+            handlers -- A list of function pointers
+            **kwargs -- Any additional parameters required by the backend.
+        """
+        pass
+
+    # =================================================================
+    # Server side (command provider) API
 
     def add_command(self, jid=None, node=None, name='', handler=None):
         if jid is None:
@@ -169,7 +194,6 @@ class xep_0050(base_plugin):
         session['payload_class'] = payload.__class__
 
         self.sessions[sessionid] = session
-        session = self.sessions[sessionid]
 
         iq.reply()
         iq['command']['sessionid'] = sessionid
@@ -227,7 +251,6 @@ class xep_0050(base_plugin):
         session['interface'] = payload.plugin_attrib
 
         self.sessions[sessionid] = session
-        session = self.sessions[sessionid]
 
         register_stanza_plugin(Command, payload.__class__)
 
@@ -271,12 +294,15 @@ class xep_0050(base_plugin):
         iq['command']['status'] = 'canceled'
         iq.send()
 
+    # =================================================================
+    # Client side (command user) API
+
     def get_commands(self, jid, **kwargs):
         return self.xmpp['xep_0030'].get_items(jid=jid,
                                                node=Command.namespace,
                                                **kwargs)
 
-    def run_command(self, jid, node, ifrom=None, action='execute',
+    def send_command(self, jid, node, ifrom=None, action='execute',
                     payload=None, sessionid=None, **kwargs):
         iq = self.xmpp.Iq()
         iq['type'] = 'set'
@@ -290,3 +316,81 @@ class xep_0050(base_plugin):
         if payload is not None:
             iq['command'].append(payload)
         return iq.send(**kwargs)
+
+    def start_command(self, jid, node, session, ifrom=None):
+        session['jid'] = jid
+        session['node'] = node
+        session['timestamp'] = time.time()
+        session['payload'] = None
+        iq = self.xmpp.Iq()
+        iq['type'] = 'set'
+        iq['to'] = jid
+        if ifrom:
+            iq['from'] = ifrom
+        iq['command']['node'] = node
+        iq['command']['action'] = 'execute'
+        sessionid = 'client:pending_' + iq['id']
+        session['id'] = sessionid
+        self.sessions[sessionid] = session
+        iq.send(block=False)
+
+    def continue_command(self, session):
+        sessionid = 'client:' + session['id']
+        self.sessions[sessionid] = session
+
+        self.send_command(session['jid'],
+                          session['node'],
+                          ifrom=session.get('from', None),
+                          action='next',
+                          payload=session.get('payload', None),
+                          sessionid=session['id'])
+
+    def cancel_command(self, session):
+        sessionid = 'client:' + session['id']
+        self.sessions[sessionid] = session
+
+        self.send_command(session['jid'],
+                          session['node'],
+                          ifrom=session.get('from', None),
+                          action='cancel',
+                          payload=session.get('payload', None),
+                          sessionid=session['id'])
+
+    def complete_command(self, session):
+        sessionid = 'client:' + session['id']
+        self.sessions[sessionid] = session
+
+        self.send_command(session['jid'],
+                          session['node'],
+                          ifrom=session.get('from', None),
+                          action='complete',
+                          payload=session.get('payload', None),
+                          sessionid=session['id'])
+
+    def _handle_command_result(self, iq):
+        log.debug('ADHOC: Received response')
+        sessionid = 'client:' + iq['command']['sessionid']
+        pending = False
+
+        if sessionid not in self.sessions:
+            pending = True
+            pendingid = 'client:pending_' + iq['id']
+            if pendingid not in self.sessions:
+                return
+            sessionid = pendingid
+
+        session = self.sessions[sessionid]
+        sessionid = 'client:' + iq['command']['sessionid']
+        session['id'] = iq['command']['sessionid']
+
+        self.sessions[sessionid] = session
+
+        if pending:
+            del self.sessions[pendingid]
+
+        handler_type = 'next'
+        if iq['type'] == 'error':
+            handler_type = 'error'
+        handler = session.get(handler_type, None)
+        if handler:
+            handler(iq, session)

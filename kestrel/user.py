@@ -78,7 +78,8 @@ class Client(sleekxmpp.ClientXMPP):
             job = read_job(file)
         if job:
             job_id = self['kestrel_client'].submit_job(job)
-        logging.info('Job accepted. ID: %s' % job_id)
+        if job_id != False:
+            logging.info('Job accepted. ID: %s' % job_id)
         if self.single_command:
             self.disconnect()
 

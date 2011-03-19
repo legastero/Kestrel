@@ -82,8 +82,11 @@ class Kestrel(object):
             p.execute()
 
             reset_tasks = {}
-            p = self.redis.pipeline()
             tasks = self.redis.smembers('worker:%s:tasks' % name)
+            p = self.redis.pipeline()
+            p.delete('worker:%s')
+            p.delete('worker:%s:jobs' % name)
+            p.delete('worker:%s:tasks' % name)
             for task in tasks:
                 job, task = task.split(',')
                 if job not in reset_tasks:
@@ -154,9 +157,11 @@ class Kestrel(object):
         self.redis.srem('jobs:queued', job)
 
         cancellations = {}
-        running_tasks = self.redis.smembers('job:%s:tasks:running' % job)
-        pending_tasks = self.redis.smembers('job:%s:tasks:pending' % job)
-        tasks = running_tasks.union(pending_tasks)
+        tasks = self.redis.sunion(['job:%s:tasks:running' % job,
+                                   'job:%s:tasks:pending' % job])
+        self.redis.sunionstore('job:%s:tasks:completed',
+                               ['job:%s:tasks:queued' % job,
+                                'job:%s:tasks:completed' % job])
         for task in tasks:
             worker = self.redis.get('job:%s:task:%s' % (job, task))
             if worker and worker not in cancellations:
@@ -238,7 +243,7 @@ class Kestrel(object):
         user_jobs = set()
         for job in jobs:
             if self.redis.get('job:%s:owner' % job) == user:
-                user_jobs.append(job)
+                user_jobs.add(job)
         return user_jobs
 
     def known_worker(self, name):
