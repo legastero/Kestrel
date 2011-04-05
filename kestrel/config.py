@@ -53,12 +53,27 @@ class ClientConfig(ElementBase):
     sub_interfaces = interfaces
 
 
+class RedisConfig(ElementBase):
+
+    name = 'redis'
+    namespace = 'kestrel:config'
+    plugin_attrib = name
+    interfaces = set(('host', 'port', 'database'))
+    sub_interfaces = interfaces
+
+    def get_port(self):
+        port = self._get_sub_text('port')
+        if port:
+            return int(port)
+        return 6973
+
 register_stanza_plugin(Config, WorkerConfig)
 register_stanza_plugin(Config, ManagerConfig)
 register_stanza_plugin(Config, ClientConfig)
 register_stanza_plugin(WorkerConfig, XMPPConfig)
 register_stanza_plugin(ManagerConfig, XMPPConfig)
 register_stanza_plugin(ClientConfig, XMPPConfig)
+register_stanza_plugin(ManagerConfig, RedisConfig)
 
 
 def load_config(file_name):

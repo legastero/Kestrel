@@ -20,6 +20,11 @@ class Manager(sleekxmpp.ComponentXMPP):
 
         self.config = config
 
+        self.redis_config = {
+                'hostname': self.config['redis']['hostname'],
+                'port': self.config['redis']['port'],
+                'db': self.config['redis']['database']}
+
         self.register_plugin('xep_0030')
         self.register_plugin('xep_0092')
         self.register_plugin('xep_0004',
@@ -29,12 +34,16 @@ class Manager(sleekxmpp.ComponentXMPP):
         self.register_plugin('xep_0199',
                              {'keepalive': False})
         self.register_plugin('redis_queue',
+                             self.redis_config,
                              module='kestrel.plugins.redis_queue')
         self.register_plugin('redis_id',
+                             self.redis_config,
                              module='kestrel.plugins.redis_id')
         self.register_plugin('redis_adhoc',
+                             self.redis_config,
                              module='kestrel.plugins.redis_adhoc')
         self.register_plugin('redis_roster',
+                             self.redis_config,
                              module='kestrel.plugins.redis_roster')
         self.register_plugin(
                 'kestrel_manager',
