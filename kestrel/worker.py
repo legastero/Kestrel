@@ -24,8 +24,7 @@ class Worker(sleekxmpp.ClientXMPP):
         self.register_plugin('xep_0030')
         self.register_plugin('xep_0004',
                              module='kestrel.plugins.xep_0004')
-        self.register_plugin('xep_0050',
-                             module='kestrel.plugins.xep_0050')
+        self.register_plugin('xep_0050')
         self.register_plugin('xep_0199')
         self.register_plugin('kestrel_executor',
                              {'max_tasks': 1},

@@ -29,8 +29,7 @@ class Manager(sleekxmpp.ComponentXMPP):
         self.register_plugin('xep_0092')
         self.register_plugin('xep_0004',
                              module='kestrel.plugins.xep_0004')
-        self.register_plugin('xep_0050',
-                             module='kestrel.plugins.xep_0050')
+        self.register_plugin('xep_0050')
         self.register_plugin('xep_0199',
                              {'keepalive': False})
         self.register_plugin('redis_queue',
