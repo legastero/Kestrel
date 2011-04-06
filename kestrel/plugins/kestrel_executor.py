@@ -58,7 +58,7 @@ class kestrel_executor(base_plugin):
 
         def handle_command(form, session):
             with self.lock:
-                if len(self.tasks) + 1 > self.max_tasks:
+                if self.max_tasks and len(self.tasks) + 1 > self.max_tasks:
                     raise XMPPError(
                             condition='resource-constraint',
                             text='Maximum number of tasks already running.',
