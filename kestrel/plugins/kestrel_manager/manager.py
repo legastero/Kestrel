@@ -40,6 +40,7 @@ class kestrel_manager(base.base_plugin):
 
         events = [
             ('session_start', self.clean_pool, True),
+            ('got_online', self._handle_online, True),
             ('changed_status', self._handle_changed_status, False),
             ('kestrel_register_worker', self._handle_register_worker, True),
             ('kestrel_worker_available', self._handle_worker_available, True),
@@ -137,6 +138,10 @@ class kestrel_manager(base.base_plugin):
             self.xmpp['xep_0199'].send_ping(worker,
                                             ifrom=self.pool_jid,
                                             block=False)
+
+    def _handle_online(self, presence):
+        self.xmpp.send_presence(pto=presence['from'],
+                                pfrom=presence['to'])
 
     def _handle_changed_status(self, presence):
         jid = presence['from'].jid
