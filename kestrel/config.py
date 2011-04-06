@@ -65,7 +65,7 @@ class RedisConfig(ElementBase):
         port = self._get_sub_text('port')
         if port:
             return int(port)
-        return 6973
+        return 6379
 
 register_stanza_plugin(Config, WorkerConfig)
 register_stanza_plugin(Config, ManagerConfig)
