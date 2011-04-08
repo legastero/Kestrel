@@ -21,7 +21,7 @@ class Manager(sleekxmpp.ComponentXMPP):
         self.config = config
 
         self.redis_config = {
-                'hostname': self.config['redis']['hostname'],
+                'host': self.config['redis']['host'],
                 'port': self.config['redis']['port'],
                 'db': self.config['redis']['database']}
 

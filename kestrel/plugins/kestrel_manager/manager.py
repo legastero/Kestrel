@@ -42,6 +42,7 @@ class kestrel_manager(base.base_plugin):
             ('session_start', self.clean_pool, True),
             ('got_online', self._handle_online, True),
             ('changed_status', self._handle_changed_status, False),
+            ('changed_status', self._handle_changed_status, True),
             ('kestrel_register_worker', self._handle_register_worker, True),
             ('kestrel_worker_available', self._handle_worker_available, True),
             ('kestrel_worker_busy', self._handle_worker_busy, True),
@@ -72,6 +73,10 @@ class kestrel_manager(base.base_plugin):
         pool_jid = self.pool_jid.full
         job_jid = self.job_jid.full
         jid = self.xmpp.boundjid.full
+
+        self.xmpp.schedule('Clean Pending', 15,
+                           self.clean_pending,
+                           repeat=True)
 
         items = [(pool_jid, None, 'Worker Pool', jid),
                  (pool_jid, 'online', 'Online Workers', pool_jid),
@@ -130,6 +135,12 @@ class kestrel_manager(base.base_plugin):
                  self._dispatch_task_command,
                  self._dispatch_task_error],
                 prefix='dispatch_task:')
+
+    def clean_pending(self):
+        log.debug("Clean pending tasks.")
+        jobs = self.kestrel.reset_pending_tasks()
+        for job in jobs:
+            self._dispatch_job(job)
 
     def clean_pool(self, event):
         log.debug("Clean the worker pool.")
@@ -225,16 +236,11 @@ class kestrel_manager(base.base_plugin):
                 job['cleanup'],
                 job['size'],
                 job['requirements'])
-        log.debug("MATCHES: %s %s" % (job, matches))
-        job = self.kestrel.get_job(job)
-        if matches:
-            for task in matches:
-                worker = matches[task]
-                self._dispatch_task(worker, job, task)
+        self._dispatch_job(job)
 
     def _handle_cancel_job(self, data):
         user, job = data
-        cancellations = self.kestrel.cancel_job(user, job)
+        cancellations = self.kestrel.cancel_job(job, user)
 
     def _handle_register_worker(self, data):
         worker, caps = data
@@ -243,6 +249,7 @@ class kestrel_manager(base.base_plugin):
     def _handle_worker_available(self, worker):
         task = self.kestrel.worker_available(worker)
         if not task:
+            log.debug('NO MATCHES')
             return
         log.debug('MATCH: %s %s, %s' % (worker, task[0], task[1]))
         job = self.kestrel.get_job(task[0])
@@ -284,7 +291,6 @@ class kestrel_manager(base.base_plugin):
                                             ifrom=self.pool_jid.full)
 
     def _dispatch_task_next(self, iq, session):
-        log.debug('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
         job = session['job']
         task = session['task']
 
@@ -298,7 +304,6 @@ class kestrel_manager(base.base_plugin):
         self.xmpp['xep_0050'].continue_command(session)
 
     def _dispatch_task_command(self, iq, session):
-        log.debug('222222>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
         job = session['job']
         task = session['task']
 
@@ -320,3 +325,13 @@ class kestrel_manager(base.base_plugin):
         self.kestrel.task_reset(session['worker'],
                                 session['job'],
                                 session['task'])
+        self._dispatch_job(session['job'])
+
+    def _dispatch_job(self, job):
+        matches = self.kestrel.job_matches(job)
+        log.debug("MATCHES: %s %s" % (job, matches))
+        job = self.kestrel.get_job(job)
+        if matches:
+            for task in matches:
+                worker = matches[task]
+                self._dispatch_task(worker, job, task)

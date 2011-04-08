@@ -124,13 +124,10 @@ class redis_adhoc(base_plugin):
         func_keys = {}
         for key in session:
             if isinstance(session[key], JID):
-                log.debug('REDIS ADHOC: JID %s %s' % (key, session[key]))
                 jid_keys[key] = session[key].full
             elif isinstance(session[key], ElementBase):
-                log.debug('REDIS ADHOC: XML %s %s' % (key, session[key]))
                 xml_keys[key] = (session[key].__class__, str(session[key]))
             elif isinstance(session[key], types.MethodType):
-                log.debug('REDIS ADHOC: METHOD %s %s' % (key, session[key]))
                 func = session[key]
                 func_hash = prefix + str(hash(func.__name__))
                 self.funcs[func_hash] = func

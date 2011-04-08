@@ -79,6 +79,6 @@ register_stanza_plugin(ManagerConfig, RedisConfig)
 def load_config(file_name):
     file_name = os.path.expanduser(file_name)
     with open(file_name, 'r+') as file:
-        data = "\n".join([line for line in file])
+        data = "".join([line for line in file])
         config = Config(xml=ET.fromstring(data))
         return config
