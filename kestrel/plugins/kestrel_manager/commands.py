@@ -148,7 +148,7 @@ class cmd_submitjob(AdhocCommand):
 
     def complete(self, form, session):
         id = self.kestrel.job_id()
-        reqs = set(form['values']['requirements'].split("\n"))
+        reqs = set([r.upper() for r in form['values']['requirements'].split("\n")])
         job = {'id': id,
                'owner': session['from'].bare,
                'command': form['values']['command'],

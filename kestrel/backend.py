@@ -35,6 +35,9 @@ class Kestrel(object):
         p.sadd('workers:online', name)
         p.execute()
 
+    def worker_capabilities(self, name):
+        return self.redis.smembers('worker:%s' % name)
+
     def worker_available(self, name):
         log.debug('POOL: Worker %s available' % name)
         if self.redis.sismember('workers:online', name):
@@ -114,7 +117,7 @@ class Kestrel(object):
         p = self.redis.pipeline()
         p.set('job:%s:owner' % job, owner)
         p.set('job:%s:command' % job, command)
-        p.set('job:%s:cleanup' % job, command)
+        p.set('job:%s:cleanup' % job, cleanup)
         p.set('job:%s:size' % job, size)
         for req in requirements:
             p.sadd('job:%s:requirements' % job, req)
@@ -169,6 +172,34 @@ class Kestrel(object):
             cancellations[worker].add(task)
         return cancellations
 
+    def job_matches(self, job):
+        requirements = self.redis.smembers('job:%s:requirements' % job)
+        p = self.redis.pipeline()
+        matches = {}
+        workers = self.redis.smembers('workers:online')
+        for worker in workers:
+            caps = self.redis.smembers('worker:%s' % worker)
+            if caps.issuperset(requirements):
+                p.sadd('job:%s:workers' % job, worker)
+                p.sadd('worker:%s:jobs' % worker, job)
+
+                if self.redis.sismember('workers:online', worker):
+                    task = self.redis.srandmember('job:%s:tasks:queued' % job)
+                    if task is not None:
+                        p.smove('job:%s:tasks:queued' % job,
+                                'job:%s:tasks:pending' % job,
+                                task)
+                        p.set('job:%s:task:%s:is_pending' % (job, task), 'True')
+                        p.expire('job:%s:task:%s:is_pending' % (job, task), 15)
+                        p.sadd('worker:%s:tasks' % worker,
+                               '%s,%s' % (job, task))
+                        p.set('job:%s:task:%s' % (job, task), worker)
+                        log.debug('MATCH: Matched worker %s to ' % worker + \
+                                  'task %s,%s' % (job, task))
+                        matches[task] = worker
+        p.execute()
+        return matches
+
     def task_start(self, worker, job, task):
         log.debug('TASK: Task %s,%s started by %s' % (job, task, worker))
         p = self.redis.pipeline()
@@ -209,6 +240,9 @@ class Kestrel(object):
         p.srem('worker:%s:tasks' % worker, '%s,%s' % (job, task))
         p.delete('job:%s:task:%s' % (job, task), worker)
         p.execute()
+
+    def reset_pending_tasks(self):
+        return set()
 
     def job_status(self, job=None):
         if job is None:
