@@ -57,10 +57,8 @@ class Client(sleekxmpp.ClientXMPP):
         self.single_command = True
 
         self.register_plugin('xep_0030')
-        self.register_plugin('xep_0004',
-                             module='kestrel.plugins.xep_0004')
-        self.register_plugin('xep_0050',
-                             module='kestrel.plugins.xep_0050')
+        self.register_plugin('xep_0004')
+        self.register_plugin('xep_0050')
         self.register_plugin('kestrel_client',
                              {'submit_jid': config['submit'],
                               'pool_jid': config['pool']},
