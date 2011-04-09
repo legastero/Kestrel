@@ -1,5 +1,5 @@
 import sys, os
-from setuptools import setup, find_packages
+from distutils.core import setup
 
 import kestrel
 
@@ -23,7 +23,7 @@ setup(name='kestrel',
       author_email='lancestout@gmail.com',
       url='http://github.com/legastero/kestrel',
       license='Apache License 2.0',
-      packages=find_packages(exclude=['ez_setup', 'examples', 'tests']),
+      packages=['kestrel', 'kestrel/plugins', 'kestrel/plugins/kestrel_manager'],
       scripts=['scripts/kestrel'],
       include_package_data=True,
       zip_safe=False,

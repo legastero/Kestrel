@@ -6,3 +6,5 @@ kestrel.egg-info*
 *.db
 .\#*
 *.swp
+env*
+dist*
