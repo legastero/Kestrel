@@ -42,7 +42,6 @@ class kestrel_manager(base.base_plugin):
             ('session_start', self.clean_pool, True),
             ('got_online', self._handle_online, True),
             ('changed_status', self._handle_changed_status, False),
-            ('changed_status', self._handle_changed_status, True),
             ('kestrel_register_worker', self._handle_register_worker, True),
             ('kestrel_worker_available', self._handle_worker_available, True),
             ('kestrel_worker_busy', self._handle_worker_busy, True),
@@ -74,8 +73,8 @@ class kestrel_manager(base.base_plugin):
         job_jid = self.job_jid.full
         jid = self.xmpp.boundjid.full
 
-        self.xmpp.schedule('Clean Pending', 15,
-                           self.clean_pending,
+        self.xmpp.schedule('Clean Tasks', 60,
+                           self.clean_tasks,
                            repeat=True)
 
         items = [(pool_jid, None, 'Worker Pool', jid),
@@ -136,9 +135,11 @@ class kestrel_manager(base.base_plugin):
                  self._dispatch_task_error],
                 prefix='dispatch_task:')
 
-    def clean_pending(self):
-        log.debug("Clean pending tasks.")
-        jobs = self.kestrel.reset_pending_tasks()
+    def clean_tasks(self):
+        log.debug("Clean pending and stalled tasks.")
+        stalled_jobs = self.kestrel.reset_stalled_tasks()
+        pending_jobs = self.kestrel.reset_pending_tasks()
+        jobs = stalled_jobs.union(pending_jobs)
         for job in jobs:
             self._dispatch_job(job)
 
