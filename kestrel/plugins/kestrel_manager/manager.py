@@ -39,16 +39,16 @@ class kestrel_manager(base.base_plugin):
                          self._handle_ping_error))
 
         events = [
-            ('session_start', self.clean_pool, True),
-            ('got_online', self._handle_online, True),
-            ('changed_status', self._handle_changed_status, False),
-            ('kestrel_register_worker', self._handle_register_worker, True),
-            ('kestrel_worker_available', self._handle_worker_available, True),
-            ('kestrel_worker_busy', self._handle_worker_busy, True),
-            ('kestrel_worker_offline', self._handle_worker_offline, True),
-            ('kestrel_job_submit', self._handle_submit_job, True),
-            ('kestrel_job_cancel', self._handle_cancel_job, True),
-            ('kestrel_job_complete', self._handle_complete_job, True)]
+            ('session_start', self.clean_pool, False),
+            ('got_online', self._handle_online, False),
+            ('changed_status', self._handle_changed_status, True),
+            ('kestrel_register_worker', self._handle_register_worker, False),
+            ('kestrel_worker_available', self._handle_worker_available, False),
+            ('kestrel_worker_busy', self._handle_worker_busy, False),
+            ('kestrel_worker_offline', self._handle_worker_offline, False),
+            ('kestrel_job_submit', self._handle_submit_job, False),
+            ('kestrel_job_cancel', self._handle_cancel_job, False),
+            ('kestrel_job_complete', self._handle_complete_job, False)]
 
         for event in events:
             self.xmpp.add_event_handler(event[0], event[1],
@@ -73,7 +73,7 @@ class kestrel_manager(base.base_plugin):
         job_jid = self.job_jid.full
         jid = self.xmpp.boundjid.full
 
-        self.xmpp.schedule('Clean Tasks', 60,
+        self.xmpp.schedule('Clean Tasks', 15,
                            self.clean_tasks,
                            repeat=True)
 
