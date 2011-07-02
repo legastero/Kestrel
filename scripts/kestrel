@@ -48,7 +48,7 @@ def start_submit(conf, args):
         logging.error("Missing job file.")
         sys.exit(0)
 
-    xmpp.single_command = True
+    xmpp.single_command = False
     xmpp.add_event_handler('kestrel_start', run_submit)
 
     if xmpp.connect():

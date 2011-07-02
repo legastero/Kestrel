@@ -55,7 +55,7 @@ class kestrel_client(base_plugin):
                                             session)
 
         try:
-            result = self.submit_queue.get(block=True,
+            result = self.submit_queue.get(block=False, # hacked to false
                                            timeout=self.timeout)
         except:
             result = False

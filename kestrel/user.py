@@ -54,8 +54,7 @@ class Client(sleekxmpp.ClientXMPP):
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
         self.config = config
-        self.single_command = True
-
+        self.single_command = False
         self.register_plugin('xep_0030')
         self.register_plugin('xep_0004',
                              module='kestrel.plugins.xep_0004')
